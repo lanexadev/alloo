@@ -43,10 +43,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-primary/15 blur-3xl"
+      />
+      <div className="w-full max-w-sm space-y-6 rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-primary">Alloo</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">Alloo</h1>
           <p className="mt-2 text-muted-foreground">
             Content de te revoir !
           </p>
@@ -87,7 +91,7 @@ export default function LoginPage() {
             <span className="w-full border-t" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">ou</span>
+            <span className="bg-card px-2 text-muted-foreground">ou</span>
           </div>
         </div>
 
