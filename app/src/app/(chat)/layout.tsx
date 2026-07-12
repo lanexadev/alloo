@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { api } from "../../../convex/_generated/api";
+import { CallProvider } from "@/components/call/call-provider";
 
 export default function ChatLayout({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -53,5 +54,5 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) return null;
 
-  return <>{children}</>;
+  return <CallProvider>{children}</CallProvider>;
 }

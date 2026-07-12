@@ -45,6 +45,19 @@ export default defineSchema({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     content: v.string(),
+    type: v.optional(v.union(v.literal("text"), v.literal("call"))),
+    callData: v.optional(
+      v.object({
+        callId: v.id("calls"),
+        callType: v.union(v.literal("audio"), v.literal("video")),
+        status: v.union(
+          v.literal("ended"),
+          v.literal("missed"),
+          v.literal("declined")
+        ),
+        duration: v.optional(v.float64()),
+      })
+    ),
   })
     .index("by_conversation", ["conversationId"]),
 
@@ -55,4 +68,56 @@ export default defineSchema({
   })
     .index("by_conversation", ["conversationId"])
     .index("by_conversation_user", ["conversationId", "userId"]),
+
+  calls: defineTable({
+    conversationId: v.id("conversations"),
+    initiatorId: v.id("users"),
+    type: v.union(v.literal("audio"), v.literal("video")),
+    status: v.union(
+      v.literal("ringing"),
+      v.literal("active"),
+      v.literal("ended"),
+      v.literal("missed"),
+      v.literal("declined")
+    ),
+    startedAt: v.optional(v.float64()),
+    endedAt: v.optional(v.float64()),
+    duration: v.optional(v.float64()),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_status", ["status"]),
+
+  callParticipants: defineTable({
+    callId: v.id("calls"),
+    userId: v.id("users"),
+    status: v.union(
+      v.literal("ringing"),
+      v.literal("joined"),
+      v.literal("left"),
+      v.literal("declined"),
+      v.literal("missed")
+    ),
+    joinedAt: v.optional(v.float64()),
+    leftAt: v.optional(v.float64()),
+    isMuted: v.boolean(),
+    isCameraOff: v.boolean(),
+    isScreenSharing: v.boolean(),
+  })
+    .index("by_call", ["callId"])
+    .index("by_user", ["userId"])
+    .index("by_call_user", ["callId", "userId"]),
+
+  callSignaling: defineTable({
+    callId: v.id("calls"),
+    fromUserId: v.id("users"),
+    toUserId: v.id("users"),
+    type: v.union(
+      v.literal("offer"),
+      v.literal("answer"),
+      v.literal("ice-candidate")
+    ),
+    payload: v.string(),
+    consumed: v.boolean(),
+  })
+    .index("by_call_to", ["callId", "toUserId", "consumed"]),
 });

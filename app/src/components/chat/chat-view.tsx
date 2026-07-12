@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ChatBubble } from "./chat-bubble";
+import { CallBubble } from "./call-bubble";
 import { ChatInput } from "./chat-input";
 import { TypingIndicator } from "./typing-indicator";
 import { GroupInfo } from "./group-info";
@@ -12,7 +13,8 @@ import { useEffect, useRef, useState } from "react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Users, AlertCircle } from "lucide-react";
+import { ArrowLeft, Users, AlertCircle, Phone, Video } from "lucide-react";
+import { useCallContext } from "@/components/call/call-provider";
 import { formatLastSeen } from "@/lib/format-time";
 
 interface ChatViewProps {
@@ -25,6 +27,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
   const conversation = useQuery(api.conversations.get, { conversationId });
   const markAsRead = useMutation(api.conversations.markAsRead);
   const { user } = useCurrentUser();
+  const { startCall } = useCallContext();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [profileUser, setProfileUser] = useState<any>(null);
@@ -121,6 +124,21 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 
         <div className="flex-1" />
 
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => void startCall(conversationId, "audio")}
+        >
+          <Phone className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => void startCall(conversationId, "video")}
+        >
+          <Video className="h-4 w-4" />
+        </Button>
+
         {conversation.type === "group" && (
           <Button
             variant="ghost"
@@ -137,22 +155,39 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
         <div className="flex flex-1 flex-col">
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
             <div className="space-y-1">
-              {messages?.map((msg) => (
-                <ChatBubble
-                  key={msg._id}
-                  content={msg.content}
-                  sender={msg.sender}
-                  isOwn={msg.isOwn}
-                  isRead={msg.isRead}
-                  timestamp={msg._creationTime}
-                  showSender={conversation.type === "group"}
-                  onSenderClick={
-                    !msg.isOwn && msg.sender
-                      ? () => setProfileUser(msg.sender)
-                      : undefined
-                  }
-                />
-              ))}
+              {messages?.map((msg) =>
+                msg.type === "call" && msg.callData ? (
+                  <CallBubble
+                    key={msg._id}
+                    callType={msg.callData.callType}
+                    status={msg.callData.status}
+                    duration={msg.callData.duration}
+                    isOwn={msg.isOwn}
+                    timestamp={msg._creationTime}
+                    senderName={
+                      msg.sender?.displayName ??
+                      msg.sender?.name ??
+                      msg.sender?.username ??
+                      "Inconnu"
+                    }
+                  />
+                ) : (
+                  <ChatBubble
+                    key={msg._id}
+                    content={msg.content}
+                    sender={msg.sender}
+                    isOwn={msg.isOwn}
+                    isRead={msg.isRead}
+                    timestamp={msg._creationTime}
+                    showSender={conversation.type === "group"}
+                    onSenderClick={
+                      !msg.isOwn && msg.sender
+                        ? () => setProfileUser(msg.sender)
+                        : undefined
+                    }
+                  />
+                ),
+              )}
             </div>
             <TypingIndicator conversationId={conversationId} />
           </div>
