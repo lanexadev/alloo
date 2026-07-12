@@ -54,7 +54,7 @@ export function UserAvatar({
 
   return (
     <div className={cn("relative flex-shrink-0", className)}>
-      <Avatar className={sizeMap[size]}>
+      <Avatar className={cn(sizeMap[size], "relative overflow-hidden rounded-full")}>
         {src ? (
           <Image
             src={src}
