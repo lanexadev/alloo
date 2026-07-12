@@ -10,6 +10,21 @@ import { useCurrentUser } from "./use-current-user";
 
 const RING_TIMEOUT_MS = 30_000;
 
+function mediaErrorMessage(err: unknown): string {
+	if (typeof navigator !== "undefined" && !navigator.mediaDevices) {
+		// getUserMedia only exists in secure contexts (https or localhost).
+		return "Appels indisponibles ici : ouvre l'app en HTTPS ou sur localhost";
+	}
+	if (err instanceof DOMException) {
+		if (err.name === "NotAllowedError")
+			return "Accès micro/caméra refusé — autorise-le dans ton navigateur";
+		if (err.name === "NotFoundError") return "Aucun micro ou caméra détecté";
+		if (err.name === "NotReadableError")
+			return "Micro/caméra déjà utilisé par une autre application";
+	}
+	return err instanceof Error ? err.message : "Échec de l'appel";
+}
+
 /**
  * Orchestrates a 1:1 call: wires the Convex reactive queries/mutations to the
  * WebRTC manager and the Zustand phase machine. Exactly one peer connection.
@@ -239,9 +254,7 @@ export function useCall() {
 					.startCall(newCallId as string, targetConversationId, type);
 			} catch (err) {
 				teardown();
-				useCallStore
-					.getState()
-					.endCall(err instanceof Error ? err.message : "Échec de l'appel");
+				useCallStore.getState().endCall(mediaErrorMessage(err));
 			}
 		},
 		[getOrCreateManager, initiateMutation, teardown],
@@ -254,13 +267,14 @@ export function useCall() {
 			const manager = getOrCreateManager(true); // callee = polite
 			const stream = await manager.acquireMedia(state.callType === "video");
 			useCallStore.getState().setLocalStream(stream);
-			await acceptMutation({ callId: state.callId as Id<"calls"> });
+			// Leave "ringing" BEFORE the mutation resolves: accepting flips the call
+			// to active server-side, which nulls the incomingCall query — if we were
+			// still "ringing" at that point, the cancellation detector would fire.
 			useCallStore.getState().setConnecting();
+			await acceptMutation({ callId: state.callId as Id<"calls"> });
 		} catch (err) {
 			teardown();
-			useCallStore
-				.getState()
-				.endCall(err instanceof Error ? err.message : "Échec de connexion");
+			useCallStore.getState().endCall(mediaErrorMessage(err));
 		}
 	}, [getOrCreateManager, acceptMutation, teardown]);
 
