@@ -45,7 +45,13 @@ export default defineSchema({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     content: v.string(),
-    type: v.optional(v.union(v.literal("text"), v.literal("call"))),
+    replyToId: v.optional(v.id("messages")),
+    pinnedAt: v.optional(v.float64()),
+    pinnedBy: v.optional(v.id("users")),
+    deletedFor: v.optional(v.array(v.id("users"))),
+    type: v.optional(
+      v.union(v.literal("text"), v.literal("call"), v.literal("system"))
+    ),
     callData: v.optional(
       v.object({
         callId: v.id("calls"),
@@ -60,6 +66,14 @@ export default defineSchema({
     ),
   })
     .index("by_conversation", ["conversationId"]),
+
+  messageReactions: defineTable({
+    messageId: v.id("messages"),
+    userId: v.id("users"),
+    emoji: v.string(),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_message_user", ["messageId", "userId"]),
 
   typingIndicators: defineTable({
     conversationId: v.id("conversations"),
