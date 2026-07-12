@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Figtree } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { ConvexProvider } from "@/providers/convex-provider";
@@ -20,6 +20,16 @@ export const metadata: Metadata = {
   title: "Alloo — Juste discuter. Rien d'autre.",
   description:
     "Chat minimaliste dans ton navigateur. Messages privés et groupes, zéro bloat. Gratuit.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8f9fc" },
+    { media: "(prefers-color-scheme: dark)", color: "#14161f" },
+  ],
 };
 
 export default function RootLayout({
