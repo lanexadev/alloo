@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import {
 import { MessageSquarePlus, Users, Search, Moon, Sun, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { formatLastSeen } from "@/lib/format-time";
+import { formatMessageTime } from "@/lib/format-time";
 
 interface SidebarProps {
   selectedConversation: Id<"conversations"> | null;
@@ -36,52 +36,105 @@ export function Sidebar({
   const { signOut } = useAuthActions();
   const [showNewDM, setShowNewDM] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const filteredConversations = useMemo(() => {
+    if (!conversations) return conversations;
+    const q = filter.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((conv) => {
+      const otherMember =
+        conv!.type === "dm"
+          ? conv!.members.find((m: any) => m && m._id !== user?._id)
+          : null;
+      const name =
+        conv!.type === "dm" && otherMember
+          ? ((otherMember as any).displayName ?? otherMember.username ?? conv!.displayName)
+          : conv!.displayName;
+      return (name ?? "").toLowerCase().includes(q);
+    });
+  }, [conversations, filter, user?._id]);
 
   return (
     <div className="flex h-full flex-col bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border p-4">
-        <h1 className="text-xl font-bold text-primary">Alloo</h1>
-        <div className="flex items-center gap-1">
-          <NewDMDialog open={showNewDM} onOpenChange={setShowNewDM} onSelectConversation={onSelectConversation} />
-          <NewGroupDialog open={showNewGroup} onOpenChange={setShowNewGroup} onSelectConversation={onSelectConversation} />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+      <div className="pt-safe">
+        <div className="flex h-16 items-center justify-between px-4">
+          <h1 className="text-2xl font-bold tracking-tight text-primary">Alloo</h1>
+          <div className="flex items-center gap-0.5">
+            <NewDMDialog open={showNewDM} onOpenChange={setShowNewDM} onSelectConversation={onSelectConversation} />
+            <NewGroupDialog open={showNewGroup} onOpenChange={setShowNewGroup} onSelectConversation={onSelectConversation} />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Changer de thème"
+              className="h-10 w-10 rounded-full"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+          </div>
+        </div>
+        {/* Search */}
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Rechercher une conversation"
+              className="h-10 w-full rounded-full bg-muted pl-10 pr-4 text-base outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring sm:text-sm"
+            />
+          </div>
         </div>
       </div>
 
       {/* Conversation List */}
       <ScrollArea className="flex-1">
-        <div className="p-2">
+        <div className="px-2 pb-2">
           {conversations === undefined && (
             <div className="space-y-2 p-2">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 p-2">
+                  <div className="h-12 w-12 animate-pulse rounded-full bg-muted" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-2/5 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-4/5 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
               ))}
             </div>
           )}
           {conversations?.length === 0 && (
-            <p className="p-4 text-center text-sm text-muted-foreground">
-              Aucune conversation. Commence par envoyer un message !
+            <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <MessageSquarePlus className="h-6 w-6 text-primary" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Aucune conversation. Commence par envoyer un message !
+              </p>
+            </div>
+          )}
+          {conversations && conversations.length > 0 && filteredConversations?.length === 0 && (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              Aucun résultat pour « {filter.trim()} »
             </p>
           )}
-          {conversations?.map((conv) => {
+          {filteredConversations?.map((conv) => {
             const otherMember =
               conv!.type === "dm"
                 ? conv!.members.find((m: any) => m && m._id !== user?._id)
                 : null;
+            const isActive = selectedConversation === conv!._id;
+            const hasUnread = (conv!.unreadCount ?? 0) > 0;
 
             return (
               <button
                 key={conv!._id}
                 onClick={() => onSelectConversation(conv!._id)}
-                className={`flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted ${
-                  selectedConversation === conv!._id ? "bg-muted" : ""
+                className={`flex min-h-[64px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                  isActive ? "bg-accent" : "hover:bg-muted active:bg-muted"
                 }`}
               >
                 <UserAvatar
@@ -92,23 +145,38 @@ export function Sidebar({
                   size="md"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="truncate text-sm font-medium">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span
+                      className={`truncate text-sm ${hasUnread ? "font-semibold" : "font-medium"}`}
+                    >
                       {conv!.type === "dm" && otherMember
                         ? (otherMember as any).displayName ?? otherMember.username ?? conv!.displayName
                         : conv!.displayName}
                     </span>
-                    {(conv!.unreadCount ?? 0) > 0 && (
-                      <span className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+                    {conv!.lastMessage && (
+                      <span
+                        className={`flex-shrink-0 text-[11px] tabular-nums ${
+                          hasUnread ? "font-medium text-primary" : "text-muted-foreground"
+                        }`}
+                      >
+                        {formatMessageTime(conv!.lastMessage.createdAt)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2">
+                    <p
+                      className={`truncate text-xs ${
+                        hasUnread ? "font-medium text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      {conv!.lastMessage?.content ?? "Nouvelle conversation"}
+                    </p>
+                    {hasUnread && (
+                      <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
                         {conv!.unreadCount}
                       </span>
                     )}
                   </div>
-                  {conv!.lastMessage && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {conv!.lastMessage.content}
-                    </p>
-                  )}
                 </div>
               </button>
             );
@@ -117,18 +185,32 @@ export function Sidebar({
       </ScrollArea>
 
       {/* User Footer */}
-      <div className="flex items-center gap-3 border-t border-border p-3">
-        <UserAvatar
-          src={user?.image}
-          fallback={user?.displayName ?? user?.username ?? user?.name ?? "?"}
-          size="sm"
-        />
-        <span className="flex-1 truncate text-sm font-medium">
-          {user?.displayName ?? user?.username ?? user?.name ?? "Utilisateur"}
-        </span>
-        <Button variant="ghost" size="icon" onClick={() => signOut()}>
-          <LogOut className="h-4 w-4" />
-        </Button>
+      <div className="border-t border-border pb-safe">
+        <div className="flex h-16 items-center gap-3 px-3">
+          <UserAvatar
+            src={user?.image}
+            fallback={user?.displayName ?? user?.username ?? user?.name ?? "?"}
+            size="sm"
+            isOnline
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">
+              {user?.displayName ?? user?.username ?? user?.name ?? "Utilisateur"}
+            </p>
+            {user?.username && (
+              <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Se déconnecter"
+            className="h-10 w-10 rounded-full text-muted-foreground hover:text-destructive"
+            onClick={() => signOut()}
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -157,9 +239,16 @@ function NewDMDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger
-        render={<Button variant="ghost" size="icon" />}
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Nouveau message"
+            className="h-10 w-10 rounded-full"
+          />
+        }
       >
-        <MessageSquarePlus className="h-4 w-4" />
+        <MessageSquarePlus className="h-5 w-5" />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -242,9 +331,16 @@ function NewGroupDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger
-        render={<Button variant="ghost" size="icon" />}
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Nouveau groupe"
+            className="h-10 w-10 rounded-full"
+          />
+        }
       >
-        <Users className="h-4 w-4" />
+        <Users className="h-5 w-5" />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
