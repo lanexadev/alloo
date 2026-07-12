@@ -29,6 +29,7 @@ export function ChatInput({ conversationId }: ChatInputProps) {
     setIsSending(true);
     const previousContent = content;
     setContent("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     try {
       await sendMessage({ conversationId, content: trimmed });
@@ -49,31 +50,39 @@ export function ChatInput({ conversationId }: ChatInputProps) {
     }
   };
 
+  const autoGrow = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+  }, []);
+
   return (
-    <div className="border-t border-border p-3">
-      <div className="flex items-end gap-2">
+    <div className="border-t border-border bg-card/80 pb-safe backdrop-blur-md">
+      <div className="mx-auto flex max-w-3xl items-end gap-2 px-3 py-3 sm:px-4">
         <textarea
           ref={textareaRef}
           value={content}
           onChange={(e) => {
             setContent(e.target.value);
             handleTyping();
+            autoGrow();
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Écris un message..."
+          placeholder="Écris un message…"
+          aria-label="Message"
           rows={1}
           maxLength={4000}
-          disabled={isSending}
-          className="flex-1 resize-none rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring disabled:opacity-50"
-          style={{ maxHeight: "120px" }}
+          className="max-h-[140px] min-h-[44px] flex-1 resize-none rounded-3xl bg-muted px-4 py-2.5 text-base leading-relaxed outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring sm:text-sm"
         />
         <Button
           onClick={handleSend}
           disabled={!content.trim() || isSending}
           size="icon"
-          className="h-10 w-10 rounded-xl"
+          aria-label="Envoyer"
+          className="h-11 w-11 flex-shrink-0 rounded-full shadow-sm transition-transform active:scale-95"
         >
-          <Send className="h-4 w-4" />
+          <Send className="h-5 w-5" />
         </Button>
       </div>
     </div>
