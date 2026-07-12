@@ -37,9 +37,9 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <div
-        className={`w-full md:w-80 md:block border-r border-border flex-shrink-0 ${
+        className={`w-full flex-shrink-0 border-border md:block md:w-80 md:border-r lg:w-[360px] xl:w-[400px] ${
           mobileShowChat ? "hidden" : "block"
         }`}
       >
@@ -49,7 +49,7 @@ export default function ChatPage() {
         />
       </div>
       <div
-        className={`flex-1 ${mobileShowChat ? "block" : "hidden"} md:block`}
+        className={`min-w-0 flex-1 ${mobileShowChat ? "block" : "hidden"} md:block`}
       >
         {selectedConversation ? (
           <ChatView

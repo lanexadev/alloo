@@ -87,74 +87,89 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden"
-          onClick={onBack}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (conversation.type === "dm" && otherDmMember) {
-              setProfileUser(otherDmMember);
-            } else if (conversation.type === "group") {
-              setShowGroupInfo(!showGroupInfo);
-            }
-          }}
-          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-        >
-          <UserAvatar
-            src={conversation.type === "dm" ? (otherDmMember as any)?.image : undefined}
-            fallback={headerDisplayName ?? "?"}
-            isOnline={otherDmMember?.isOnline}
-            isGroup={conversation.type === "group"}
-          />
-          <div className="min-w-0 text-left">
-            <h2 className="truncate text-sm font-semibold">
-              {headerDisplayName}
-            </h2>
-            <p className="text-xs text-muted-foreground">{statusText}</p>
-          </div>
-        </button>
-
-        <div className="flex-1" />
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => void startCall(conversationId, "audio")}
-        >
-          <Phone className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => void startCall(conversationId, "video")}
-        >
-          <Video className="h-4 w-4" />
-        </Button>
-
-        {conversation.type === "group" && (
+      <div className="border-b border-border bg-card/80 pt-safe backdrop-blur-md">
+        <div className="flex h-16 items-center gap-2 px-2 sm:gap-3 sm:px-4">
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setShowGroupInfo(!showGroupInfo)}
+            aria-label="Retour aux conversations"
+            className="h-10 w-10 flex-shrink-0 rounded-full md:hidden"
+            onClick={onBack}
           >
-            <Users className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-        )}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (conversation.type === "dm" && otherDmMember) {
+                setProfileUser(otherDmMember);
+              } else if (conversation.type === "group") {
+                setShowGroupInfo(!showGroupInfo);
+              }
+            }}
+            className="flex min-w-0 items-center gap-3 rounded-full py-1 pr-3 transition-opacity hover:opacity-80"
+          >
+            <UserAvatar
+              src={conversation.type === "dm" ? (otherDmMember as any)?.image : undefined}
+              fallback={headerDisplayName ?? "?"}
+              isOnline={otherDmMember?.isOnline}
+              isGroup={conversation.type === "group"}
+            />
+            <div className="min-w-0 text-left">
+              <h2 className="truncate text-sm font-semibold">
+                {headerDisplayName}
+              </h2>
+              <p className="truncate text-xs text-muted-foreground">
+                {otherDmMember?.isOnline ? (
+                  <span className="text-green-600 dark:text-green-500">{statusText}</span>
+                ) : (
+                  statusText
+                )}
+              </p>
+            </div>
+          </button>
+
+          <div className="flex-1" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Appel audio"
+            className="h-10 w-10 flex-shrink-0 rounded-full"
+            onClick={() => void startCall(conversationId, "audio")}
+          >
+            <Phone className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Appel vidéo"
+            className="h-10 w-10 flex-shrink-0 rounded-full"
+            onClick={() => void startCall(conversationId, "video")}
+          >
+            <Video className="h-5 w-5" />
+          </Button>
+
+          {conversation.type === "group" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Infos du groupe"
+              className="h-10 w-10 flex-shrink-0 rounded-full"
+              onClick={() => setShowGroupInfo(!showGroupInfo)}
+            >
+              <Users className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {/* Messages */}
-        <div className="flex flex-1 flex-col">
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
-            <div className="space-y-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 sm:px-6">
+            <div className="mx-auto max-w-3xl space-y-1">
               {messages?.map((msg) =>
                 msg.type === "call" && msg.callData ? (
                   <CallBubble
@@ -188,19 +203,29 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
                   />
                 ),
               )}
+              <TypingIndicator conversationId={conversationId} />
             </div>
-            <TypingIndicator conversationId={conversationId} />
           </div>
           <ChatInput conversationId={conversationId} />
         </div>
 
-        {/* Group Info Panel */}
+        {/* Group Info Panel — overlay on mobile/tablet, inline on desktop */}
         {showGroupInfo && conversation.type === "group" && (
-          <GroupInfo
-            conversation={conversation}
-            onClose={() => setShowGroupInfo(false)}
-            onMemberClick={(member: any) => setProfileUser(member)}
-          />
+          <>
+            <button
+              type="button"
+              aria-label="Fermer les infos du groupe"
+              className="absolute inset-0 z-30 bg-black/40 lg:hidden"
+              onClick={() => setShowGroupInfo(false)}
+            />
+            <div className="absolute inset-y-0 right-0 z-40 w-full max-w-xs shadow-xl lg:static lg:z-auto lg:max-w-none lg:w-auto lg:shadow-none">
+              <GroupInfo
+                conversation={conversation}
+                onClose={() => setShowGroupInfo(false)}
+                onMemberClick={(member: any) => setProfileUser(member)}
+              />
+            </div>
+          </>
         )}
       </div>
 

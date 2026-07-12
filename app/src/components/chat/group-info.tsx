@@ -64,7 +64,7 @@ export function GroupInfo({ conversation, onClose, onMemberClick }: GroupInfoPro
   const validMembers = conversation.members.filter(Boolean) as MemberData[];
 
   return (
-    <div className="w-72 border-l border-border bg-card">
+    <div className="h-full w-full border-l border-border bg-card lg:w-72">
       <div className="flex items-center justify-between border-b border-border p-4">
         <h3 className="text-sm font-semibold">Info du groupe</h3>
         <Button variant="ghost" size="icon" onClick={onClose}>
