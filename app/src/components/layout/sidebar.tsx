@@ -20,6 +20,10 @@ import { MessageSquarePlus, Users, Search, Moon, Sun, LogOut } from "lucide-reac
 import { useTheme } from "next-themes";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { formatMessageTime } from "@/lib/format-time";
+import {
+  UserMultiSelect,
+  type SelectableUser,
+} from "@/components/chat/user-multi-select";
 
 interface SidebarProps {
   selectedConversation: Id<"conversations"> | null;
@@ -311,6 +315,7 @@ function NewGroupDialog({
   onSelectConversation: (id: Id<"conversations">) => void;
 }) {
   const [name, setName] = useState("");
+  const [members, setMembers] = useState<SelectableUser[]>([]);
   const createGroup = useMutation(api.conversations.createGroup);
   const [loading, setLoading] = useState(false);
 
@@ -319,10 +324,14 @@ function NewGroupDialog({
     if (!name.trim()) return;
     setLoading(true);
     try {
-      const result = await createGroup({ name: name.trim() });
+      const result = await createGroup({
+        name: name.trim(),
+        memberIds: members.map((m) => m._id),
+      });
       onSelectConversation(result.conversationId);
       onOpenChange(false);
       setName("");
+      setMembers([]);
     } finally {
       setLoading(false);
     }
@@ -353,8 +362,18 @@ function NewGroupDialog({
             onChange={(e) => setName(e.target.value)}
             required
           />
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              Membres
+            </p>
+            <UserMultiSelect selected={members} onChange={setMembers} />
+          </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Création..." : "Créer le groupe"}
+            {loading
+              ? "Création..."
+              : members.length > 0
+                ? `Créer le groupe (${members.length + 1} membres)`
+                : "Créer le groupe"}
           </Button>
         </form>
       </DialogContent>

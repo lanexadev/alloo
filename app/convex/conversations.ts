@@ -208,14 +208,30 @@ export const createDM = mutation({
   },
 });
 
+const MAX_GROUP_MEMBERS = 100;
+
 export const createGroup = mutation({
-  args: { name: v.string() },
+  args: {
+    name: v.string(),
+    memberIds: v.optional(v.array(v.id("users"))),
+  },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
     if (!args.name.trim()) throw new Error("Group name is required");
     if (args.name.length > 100) throw new Error("Group name too long");
+
+    const initialMemberIds = [...new Set(args.memberIds ?? [])].filter(
+      (id) => id !== userId
+    );
+    if (initialMemberIds.length + 1 > MAX_GROUP_MEMBERS) {
+      throw new Error("Group is limited to 100 members");
+    }
+    for (const memberId of initialMemberIds) {
+      const user = await ctx.db.get(memberId);
+      if (!user) throw new Error("User not found");
+    }
 
     // Cryptographically secure invite code (128 bits)
     const array = new Uint8Array(16);
@@ -231,14 +247,76 @@ export const createGroup = mutation({
       inviteCode,
     });
 
+    const now = Date.now();
     await ctx.db.insert("conversationMembers", {
       conversationId,
       userId,
       role: "admin",
-      joinedAt: Date.now(),
+      joinedAt: now,
     });
+    for (const memberId of initialMemberIds) {
+      await ctx.db.insert("conversationMembers", {
+        conversationId,
+        userId: memberId,
+        role: "member",
+        joinedAt: now,
+      });
+    }
 
     return { conversationId, inviteCode };
+  },
+});
+
+export const addMembers = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    userIds: v.array(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const currentUserId = await getAuthUserId(ctx);
+    if (!currentUserId) throw new Error("Not authenticated");
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) throw new Error("Conversation not found");
+    if (conversation.type !== "group") {
+      throw new Error("Members can only be added to groups");
+    }
+
+    const membership = await getMembership(
+      ctx,
+      args.conversationId,
+      currentUserId
+    );
+    if (!membership) throw new Error("Not a member of this conversation");
+
+    const existingMembers = await ctx.db
+      .query("conversationMembers")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", args.conversationId)
+      )
+      .collect();
+    const existingIds = new Set(existingMembers.map((m) => m.userId));
+
+    const toAdd = [...new Set(args.userIds)].filter(
+      (id) => !existingIds.has(id)
+    );
+    if (existingMembers.length + toAdd.length > MAX_GROUP_MEMBERS) {
+      throw new Error("Group is limited to 100 members");
+    }
+
+    const now = Date.now();
+    for (const userId of toAdd) {
+      const user = await ctx.db.get(userId);
+      if (!user) throw new Error("User not found");
+      await ctx.db.insert("conversationMembers", {
+        conversationId: args.conversationId,
+        userId,
+        role: "member",
+        joinedAt: now,
+      });
+    }
+
+    return toAdd.length;
   },
 });
 

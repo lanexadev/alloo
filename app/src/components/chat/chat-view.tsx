@@ -132,24 +132,29 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 
           <div className="flex-1" />
 
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Appel audio"
-            className="h-10 w-10 flex-shrink-0 rounded-full"
-            onClick={() => void startCall(conversationId, "audio")}
-          >
-            <Phone className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Appel vidéo"
-            className="h-10 w-10 flex-shrink-0 rounded-full"
-            onClick={() => void startCall(conversationId, "video")}
-          >
-            <Video className="h-5 w-5" />
-          </Button>
+          {/* Calls are 1:1 only — hidden for groups */}
+          {conversation.type === "dm" && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Appel audio"
+                className="h-10 w-10 flex-shrink-0 rounded-full"
+                onClick={() => void startCall(conversationId, "audio")}
+              >
+                <Phone className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Appel vidéo"
+                className="h-10 w-10 flex-shrink-0 rounded-full"
+                onClick={() => void startCall(conversationId, "video")}
+              >
+                <Video className="h-5 w-5" />
+              </Button>
+            </>
+          )}
 
           {conversation.type === "group" && (
             <Button

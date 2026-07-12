@@ -7,10 +7,20 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Link, LogOut, QrCode, UserMinus, X } from "lucide-react";
+import { Link, LogOut, QrCode, UserMinus, UserPlus, X } from "lucide-react";
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { formatLastSeen } from "@/lib/format-time";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  UserMultiSelect,
+  type SelectableUser,
+} from "@/components/chat/user-multi-select";
 
 interface MemberData {
   _id: Id<"users">;
@@ -41,6 +51,7 @@ export function GroupInfo({ conversation, onClose, onMemberClick }: GroupInfoPro
   const removeMember = useMutation(api.conversations.removeMember);
   const [showQR, setShowQR] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAddMembers, setShowAddMembers] = useState(false);
 
   const inviteUrl = conversation.inviteCode
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/invite/${conversation.inviteCode}`
@@ -123,9 +134,20 @@ export function GroupInfo({ conversation, onClose, onMemberClick }: GroupInfoPro
 
           {/* Members */}
           <div className="space-y-1">
-            <h5 className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-              Membres
-            </h5>
+            <div className="mb-2 flex items-center justify-between">
+              <h5 className="text-xs font-medium uppercase text-muted-foreground">
+                Membres
+              </h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs text-primary"
+                onClick={() => setShowAddMembers(true)}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Ajouter
+              </Button>
+            </div>
             {validMembers.map((member) => {
               const memberDisplayName =
                 member.displayName ?? member.name ?? member.username ?? "Inconnu";
@@ -192,6 +214,72 @@ export function GroupInfo({ conversation, onClose, onMemberClick }: GroupInfoPro
           </Button>
         </div>
       </ScrollArea>
+
+      <AddMembersDialog
+        conversationId={conversation._id}
+        existingMemberIds={validMembers.map((m) => m._id)}
+        open={showAddMembers}
+        onOpenChange={setShowAddMembers}
+      />
     </div>
+  );
+}
+
+function AddMembersDialog({
+  conversationId,
+  existingMemberIds,
+  open,
+  onOpenChange,
+}: {
+  conversationId: Id<"conversations">;
+  existingMemberIds: Array<Id<"users">>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const addMembers = useMutation(api.conversations.addMembers);
+  const [selected, setSelected] = useState<SelectableUser[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleAdd = async () => {
+    if (selected.length === 0) return;
+    setLoading(true);
+    try {
+      await addMembers({
+        conversationId,
+        userIds: selected.map((u) => u._id),
+      });
+      setSelected([]);
+      onOpenChange(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ajouter des membres</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <UserMultiSelect
+            selected={selected}
+            onChange={setSelected}
+            excludeIds={existingMemberIds}
+          />
+          <Button
+            className="w-full"
+            disabled={loading || selected.length === 0}
+            onClick={handleAdd}
+          >
+            {loading
+              ? "Ajout..."
+              : selected.length > 0
+                ? `Ajouter ${selected.length} membre${selected.length > 1 ? "s" : ""}`
+                : "Ajouter"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
