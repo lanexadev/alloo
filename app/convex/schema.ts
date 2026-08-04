@@ -73,7 +73,7 @@ export default defineSchema({
     emoji: v.string(),
   })
     .index("by_message", ["messageId"])
-    .index("by_message_user", ["messageId", "userId"]),
+    .index("by_message_user_emoji", ["messageId", "userId", "emoji"]),
 
   typingIndicators: defineTable({
     conversationId: v.id("conversations"),

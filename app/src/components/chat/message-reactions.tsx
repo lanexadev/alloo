@@ -33,6 +33,7 @@ export function MessageReactions({
 					key={r.emoji}
 					type="button"
 					aria-label={`Réaction ${r.emoji} (${r.count})`}
+					aria-pressed={r.reactedByMe}
 					onClick={() => onToggle(r.emoji)}
 					className={cn(
 						"flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs shadow-sm transition-colors",

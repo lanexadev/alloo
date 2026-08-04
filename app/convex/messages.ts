@@ -212,30 +212,35 @@ export const toggleReaction = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
-    if (!args.emoji.trim() || args.emoji.length > 16) {
+    const emoji = args.emoji.trim();
+    if (!emoji || emoji.length > 16) {
       throw new Error("Invalid emoji");
     }
 
     await getAccessibleMessage(ctx, args.messageId, userId);
 
-    // One reaction per user per message: same emoji toggles off,
-    // a different emoji replaces the previous one.
+    // Each user can add several different reactions to a message. The same
+    // message/user/emoji tuple remains a toggle, so duplicate reactions cannot
+    // be created by repeatedly selecting the same emoji.
     const existing = await ctx.db
       .query("messageReactions")
-      .withIndex("by_message_user", (q) =>
-        q.eq("messageId", args.messageId).eq("userId", userId)
+      .withIndex("by_message_user_emoji", (q) =>
+        q
+          .eq("messageId", args.messageId)
+          .eq("userId", userId)
+          .eq("emoji", emoji)
       )
       .unique();
 
-    if (existing && existing.emoji === args.emoji) {
+    if (existing) {
       await ctx.db.delete(existing._id);
       return;
     }
-    if (existing) await ctx.db.delete(existing._id);
+
     await ctx.db.insert("messageReactions", {
       messageId: args.messageId,
       userId,
-      emoji: args.emoji,
+      emoji,
     });
   },
 });

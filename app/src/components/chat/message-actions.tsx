@@ -28,7 +28,7 @@ interface MessageActionsProps {
 	onOpenChange: (open: boolean) => void;
 	isOwn: boolean;
 	isPinned: boolean;
-	myReaction?: string;
+	myReactions: string[];
 	onReact: (emoji: string) => void;
 	onReply: () => void;
 	onCopy: () => void;
@@ -42,7 +42,7 @@ export function MessageActions({
 	onOpenChange,
 	isOwn,
 	isPinned,
-	myReaction,
+	myReactions,
 	onReact,
 	onReply,
 	onCopy,
@@ -139,10 +139,11 @@ export function MessageActions({
 									key={emoji}
 									type="button"
 									aria-label={`Réagir avec ${emoji}`}
+									aria-pressed={myReactions.includes(emoji)}
 									onClick={() => react(emoji)}
 									className={cn(
 										"flex h-8 w-8 items-center justify-center rounded-full text-lg transition-transform hover:scale-110 hover:bg-accent",
-										myReaction === emoji && "bg-accent ring-1 ring-ring",
+										myReactions.includes(emoji) && "bg-accent ring-1 ring-ring",
 									)}
 								>
 									{emoji}

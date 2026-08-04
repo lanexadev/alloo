@@ -97,7 +97,9 @@ export const ChatBubble = memo(function ChatBubble({
 		void navigator.clipboard.writeText(content).catch(() => {});
 	}, [content]);
 
-	const myReaction = reactions.find((r) => r.reactedByMe)?.emoji;
+	const myReactions = reactions
+		.filter((reaction) => reaction.reactedByMe)
+		.map((reaction) => reaction.emoji);
 
 	return (
 		<motion.div
@@ -133,7 +135,7 @@ export const ChatBubble = memo(function ChatBubble({
 						onOpenChange={setMenuOpen}
 						isOwn={isOwn}
 						isPinned={isPinned}
-						myReaction={myReaction}
+						myReactions={myReactions}
 						onReact={onReact}
 						onReply={onReply}
 						onCopy={handleCopy}
@@ -293,7 +295,7 @@ export const ChatBubble = memo(function ChatBubble({
 						onOpenChange={setMenuOpen}
 						isOwn={isOwn}
 						isPinned={isPinned}
-						myReaction={myReaction}
+						myReactions={myReactions}
 						onReact={onReact}
 						onReply={onReply}
 						onCopy={handleCopy}
