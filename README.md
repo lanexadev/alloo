@@ -59,7 +59,7 @@ Alloo does one thing — messaging — and does it well.
 
 ```bash
 # Clone the repository
-git clone https://github.com/lanexadev/alloo.git
+git clone https://github.com/lucasschimmel/alloo.git
 cd alloo
 
 # Install dependencies
@@ -115,5 +115,5 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 ---
 
 <p align="center">
-  Built with care by <a href="https://github.com/lanexadev">lanexadev</a>
+  Built with care by <a href="https://github.com/lucasschimmel">lucasschimmel</a>
 </p>
