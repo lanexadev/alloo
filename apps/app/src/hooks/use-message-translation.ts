@@ -42,12 +42,21 @@ export type TranslationState =
 	| { status: "translated"; text: string }
 	| { status: "error"; message: string };
 
+interface TranslationApis {
+	translator: TranslatorStatics;
+	detector: LanguageDetectorStatics;
+}
+
+/** Both APIs, or null when the browser ships neither. */
+function getTranslationApis(): TranslationApis | null {
+	if (typeof window === "undefined") return null;
+	const { Translator, LanguageDetector } = window;
+	if (!Translator || !LanguageDetector) return null;
+	return { translator: Translator, detector: LanguageDetector };
+}
+
 export function isTranslationSupported(): boolean {
-	return (
-		typeof window !== "undefined" &&
-		!!window.Translator &&
-		!!window.LanguageDetector
-	);
+	return getTranslationApis() !== null;
 }
 
 /**
@@ -60,7 +69,8 @@ export function useMessageTranslation(content: string) {
 	const reset = useCallback(() => setState({ status: "idle" }), []);
 
 	const translate = useCallback(async () => {
-		if (!isTranslationSupported()) {
+		const apis = getTranslationApis();
+		if (!apis) {
 			setState({
 				status: "error",
 				message:
@@ -73,7 +83,7 @@ export function useMessageTranslation(content: string) {
 		try {
 			const targetLanguage = navigator.language.split("-")[0] || "fr";
 
-			const detector = await window.LanguageDetector!.create();
+			const detector = await apis.detector.create();
 			const detections = await detector.detect(content);
 			const sourceLanguage = detections[0]?.detectedLanguage;
 			if (!sourceLanguage || sourceLanguage === "und") {
@@ -91,7 +101,7 @@ export function useMessageTranslation(content: string) {
 				return;
 			}
 
-			const availability = await window.Translator!.availability({
+			const availability = await apis.translator.availability({
 				sourceLanguage,
 				targetLanguage,
 			});
@@ -104,7 +114,7 @@ export function useMessageTranslation(content: string) {
 			}
 
 			// "downloadable"/"downloading": create() triggers/waits for the model download
-			const translator = await window.Translator!.create({
+			const translator = await apis.translator.create({
 				sourceLanguage,
 				targetLanguage,
 			});
