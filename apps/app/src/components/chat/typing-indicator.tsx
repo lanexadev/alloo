@@ -27,18 +27,19 @@ export function TypingIndicator({ conversationId }: TypingIndicatorProps) {
 				initial={{ opacity: 0, height: 0 }}
 				animate={{ opacity: 1, height: "auto" }}
 				exit={{ opacity: 0, height: 0 }}
-				className="flex items-center gap-2 px-3 py-1"
+				className="flex items-center gap-2 pt-3"
 			>
-				<div className="flex gap-1">
+				<div className="flex items-center gap-1 rounded-bubble rounded-bl-md border border-border bg-bubble-in px-3.5 py-3 dark:border-transparent">
 					{[0, 1, 2].map((i) => (
-						<motion.div
+						<motion.span
 							key={i}
-							className="h-1.5 w-1.5 rounded-full bg-muted-foreground"
-							animate={{ y: [0, -4, 0] }}
+							className="size-1.5 rounded-full bg-muted-foreground/70"
+							animate={{ y: [0, -3, 0], opacity: [0.5, 1, 0.5] }}
 							transition={{
-								duration: 0.6,
+								duration: 0.9,
 								repeat: Number.POSITIVE_INFINITY,
 								delay: i * 0.15,
+								ease: "easeInOut",
 							}}
 						/>
 					))}

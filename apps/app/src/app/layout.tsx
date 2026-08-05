@@ -5,7 +5,9 @@ import { ConvexProvider } from "@/providers/convex-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import "./globals.css";
 
-const figtree = Figtree({
+/** One typeface for the whole product. Headings differ by weight and
+ *  tracking, never by family. */
+const fontSans = Figtree({
 	subsets: ["latin"],
 	variable: "--font-sans",
 });
@@ -36,8 +38,8 @@ export const viewport: Viewport = {
 	initialScale: 1,
 	viewportFit: "cover",
 	themeColor: [
-		{ media: "(prefers-color-scheme: light)", color: "#f8f9fc" },
-		{ media: "(prefers-color-scheme: dark)", color: "#14161f" },
+		{ media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
+		{ media: "(prefers-color-scheme: dark)", color: "#1c1d21" },
 	],
 };
 
@@ -52,9 +54,9 @@ export default function RootLayout({
 			suppressHydrationWarning
 			className={cn(
 				"antialiased",
-				fontMono.variable,
 				"font-sans",
-				figtree.variable,
+				fontSans.variable,
+				fontMono.variable,
 			)}
 		>
 			<body>

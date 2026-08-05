@@ -42,12 +42,11 @@ export function UserProfileDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-xs">
+			<DialogContent className="max-w-xs p-5">
 				<DialogHeader className="sr-only">
 					<DialogTitle>Profil de {displayName}</DialogTitle>
 				</DialogHeader>
-				<div className="flex flex-col items-center gap-4 pt-2">
-					{/* Avatar */}
+				<div className="flex flex-col items-center gap-4">
 					<UserAvatar
 						src={user.image}
 						fallback={displayName}
@@ -57,7 +56,9 @@ export function UserProfileDialog({
 
 					{/* Name + role */}
 					<div className="text-center">
-						<h3 className="text-lg font-semibold">{displayName}</h3>
+						<h3 className="text-base font-semibold tracking-tight">
+							{displayName}
+						</h3>
 						{user.username && (
 							<p className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
 								<AtSign className="h-3 w-3" />
@@ -73,7 +74,7 @@ export function UserProfileDialog({
 
 					{/* Bio */}
 					{user.bio && (
-						<div className="w-full rounded-lg bg-muted/50 px-4 py-3">
+						<div className="w-full rounded-lg bg-surface-sunken px-3 py-2.5">
 							<div className="flex items-start gap-2">
 								<Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
 								<p className="text-sm leading-relaxed text-foreground">

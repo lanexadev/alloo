@@ -5,7 +5,9 @@ import { Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AuthShell } from "@/components/layout/auth-shell";
 import { Button } from "@/components/ui/button";
+import { FullPageSpinner } from "@/components/ui/spinner";
 import { api } from "../../../../convex/_generated/api";
 
 export default function InvitePage() {
@@ -49,57 +51,49 @@ export default function InvitePage() {
 
 	if (error) {
 		return (
-			<div className="flex min-h-screen items-center justify-center px-4">
-				<div className="space-y-4 text-center">
-					<p className="text-destructive">{error}</p>
-					<Link href="/chat">
-						<Button>Retour au chat</Button>
-					</Link>
-				</div>
-			</div>
+			<AuthShell title="Invitation invalide">
+				<p role="alert" className="text-center text-sm text-destructive">
+					{error}
+				</p>
+				<Link href="/chat" className="block">
+					<Button size="xl" className="w-full">
+						Retour au chat
+					</Button>
+				</Link>
+			</AuthShell>
 		);
 	}
 
 	if (isLoading || joining) {
 		return (
-			<div className="flex min-h-screen items-center justify-center">
-				<div className="flex flex-col items-center gap-4">
-					<div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-					<p className="text-sm text-muted-foreground">
-						{joining ? "Rejoindre le groupe..." : "Chargement..."}
-					</p>
-				</div>
-			</div>
+			<FullPageSpinner label={joining ? "On te fait entrer…" : "Chargement…"} />
 		);
 	}
 
 	if (!isAuthenticated) {
 		return (
-			<div className="flex min-h-screen items-center justify-center px-4">
-				<div className="w-full max-w-sm space-y-6 text-center">
-					<div className="flex justify-center">
-						<div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-							<Users className="h-8 w-8 text-primary" />
-						</div>
-					</div>
-					<div>
-						<h1 className="text-2xl font-bold">Tu as été invité !</h1>
-						<p className="mt-2 text-muted-foreground">
-							Crée un compte pour rejoindre ce groupe sur Alloo
-						</p>
-					</div>
-					<div className="space-y-2">
-						<Link href="/signup">
-							<Button className="w-full">Créer mon compte</Button>
-						</Link>
-						<Link href="/login">
-							<Button variant="outline" className="w-full">
-								J&apos;ai déjà un compte
-							</Button>
-						</Link>
-					</div>
+			<AuthShell
+				title="Tu es invité !"
+				subtitle="Crée ton compte pour rejoindre ce groupe sur Alloo."
+			>
+				<div className="flex justify-center">
+					<span className="flex size-12 items-center justify-center rounded-xl border border-border text-muted-foreground">
+						<Users className="size-5" />
+					</span>
 				</div>
-			</div>
+				<div className="space-y-2">
+					<Link href="/signup" className="block">
+						<Button size="xl" className="w-full">
+							Créer mon compte
+						</Button>
+					</Link>
+					<Link href="/login" className="block">
+						<Button variant="outline" size="xl" className="w-full">
+							J&apos;ai déjà un compte
+						</Button>
+					</Link>
+				</div>
+			</AuthShell>
 		);
 	}
 

@@ -26,23 +26,25 @@ export function PinnedBanner({
 	const visible = expanded ? pinned : [latest];
 
 	return (
-		<div className="border-b border-border bg-card/60 backdrop-blur-md">
+		<div className="border-b border-border bg-surface">
 			{visible.map((msg, i) => (
 				<div
 					key={msg._id}
 					className={cn(
-						"flex items-center gap-2 px-3 py-1.5 sm:px-4",
+						"flex items-center gap-2 px-3 py-2 sm:px-6",
 						i > 0 && "border-t border-border/50",
 					)}
 				>
-					<Pin className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+					<Pin className="size-3.5 flex-shrink-0 text-primary" />
 					<button
 						type="button"
 						onClick={() => onJumpToMessage(msg._id)}
 						className="min-w-0 flex-1 text-left transition-opacity hover:opacity-70"
 					>
 						<span className="block truncate text-xs">
-							<span className="font-medium">{msg.senderName ?? "Inconnu"}</span>
+							<span className="font-semibold">
+								{msg.senderName ?? "Inconnu"}
+							</span>
 							<span className="text-muted-foreground"> · {msg.content}</span>
 						</span>
 					</button>

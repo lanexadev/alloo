@@ -128,22 +128,24 @@ export function GroupInfo({
 	};
 
 	return (
-		<div className="h-full w-full border-l border-border bg-card lg:w-72">
-			<div className="flex items-center justify-between border-b border-border p-4">
+		<div className="h-full w-full border-l border-border bg-surface lg:w-80">
+			<div className="flex h-14 items-center justify-between border-b border-border pl-4 pr-2">
 				<h3 className="text-sm font-semibold">Info du groupe</h3>
 				<Button
 					variant="ghost"
 					size="icon"
 					aria-label="Fermer les infos du groupe"
+					className="size-9 rounded-lg text-muted-foreground hover:text-foreground"
 					onClick={onClose}
 				>
-					<X className="h-4 w-4" />
+					<X className="size-4" />
 				</Button>
 			</div>
 
-			<ScrollArea className="h-[calc(100%-57px)]">
-				<div className="space-y-4 p-4">
-					<div className="text-center">
+			<ScrollArea className="h-[calc(100%-56px)]">
+				<div className="space-y-5 p-4">
+					<div className="flex flex-col items-center gap-3 pt-2 text-center">
+						<UserAvatar fallback={conversation.name ?? "?"} isGroup size="lg" />
 						{editingName ? (
 							<form
 								className="flex items-center gap-1.5"
@@ -171,7 +173,9 @@ export function GroupInfo({
 							</form>
 						) : (
 							<div className="flex items-center justify-center gap-1.5">
-								<h4 className="text-lg font-semibold">{conversation.name}</h4>
+								<h4 className="text-base font-semibold tracking-tight">
+									{conversation.name}
+								</h4>
 								{isAdmin && (
 									<Button
 										variant="ghost"
@@ -202,7 +206,7 @@ export function GroupInfo({
 					{/* Invite */}
 					{inviteUrl && (
 						<div className="space-y-2">
-							<h5 className="text-xs font-medium uppercase text-muted-foreground">
+							<h5 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
 								Invitation
 							</h5>
 							<div className="flex gap-2">
@@ -249,7 +253,7 @@ export function GroupInfo({
 									" Régénère-le pour invalider les liens déjà partagés."}
 							</p>
 							{showQR && !inviteExpired && (
-								<div className="flex justify-center rounded-lg border bg-white p-4">
+								<div className="flex justify-center rounded-lg border border-border bg-white p-4">
 									<QRCodeSVG value={inviteUrl} size={160} />
 								</div>
 							)}
@@ -261,7 +265,7 @@ export function GroupInfo({
 					{/* Members */}
 					<div className="space-y-1">
 						<div className="mb-2 flex items-center justify-between">
-							<h5 className="text-xs font-medium uppercase text-muted-foreground">
+							<h5 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
 								Membres
 							</h5>
 							{/* Adding members changes who can read the group, so it takes the
@@ -290,7 +294,7 @@ export function GroupInfo({
 									key={member._id}
 									type="button"
 									onClick={() => onMemberClick(member)}
-									className="flex w-full items-center gap-2.5 rounded-lg p-2 transition-colors hover:bg-muted"
+									className="flex w-full items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-surface-sunken"
 								>
 									<UserAvatar
 										src={member.image}
@@ -386,11 +390,11 @@ export function GroupInfo({
 
 					<Button
 						variant="destructive"
-						size="sm"
-						className="w-full"
+						size="lg"
+						className="w-full rounded-xl"
 						onClick={handleLeave}
 					>
-						<LogOut className="mr-2 h-3.5 w-3.5" />
+						<LogOut className="mr-2 size-3.5" />
 						Quitter le groupe
 					</Button>
 				</div>
@@ -444,9 +448,9 @@ function AddMembersDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent>
+			<DialogContent className="gap-5 p-5">
 				<DialogHeader>
-					<DialogTitle>Ajouter des membres</DialogTitle>
+					<DialogTitle className="text-base">Ajouter des membres</DialogTitle>
 				</DialogHeader>
 				<div className="space-y-4">
 					<UserMultiSelect
@@ -456,6 +460,7 @@ function AddMembersDialog({
 					/>
 					{error && <p className="text-xs text-destructive">{error}</p>}
 					<Button
+						size="xl"
 						className="w-full"
 						disabled={loading || selected.length === 0}
 						onClick={handleAdd}

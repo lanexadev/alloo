@@ -45,12 +45,12 @@ function ControlButton({
 			onClick={onClick}
 			aria-label={label}
 			className={cn(
-				"flex items-center justify-center rounded-full transition-colors",
+				"flex items-center justify-center rounded-full backdrop-blur-md transition-colors",
 				destructive
-					? "h-14 w-14 bg-red-500 text-white hover:bg-red-600"
-					: "h-12 w-12",
+					? "size-16 bg-red-500 text-white shadow-lg shadow-red-500/30 hover:bg-red-600"
+					: "size-12 ring-1 ring-white/10",
 				!destructive && active
-					? "bg-white/20 text-white hover:bg-white/30"
+					? "bg-white/25 text-white hover:bg-white/30"
 					: !destructive
 						? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
 						: undefined,
@@ -76,7 +76,7 @@ export function CallControls({
 			initial={{ opacity: 0, y: 20 }}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.2, delay: 0.1 }}
-			className="flex items-center justify-center gap-4 px-6 py-6"
+			className="flex items-center justify-center gap-3 px-6 pb-8 pt-6 sm:gap-4"
 		>
 			<ControlButton
 				active={isMuted}

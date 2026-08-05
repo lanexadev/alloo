@@ -16,8 +16,10 @@ import { useCallContext } from "@/components/call/call-provider";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { formatLastSeen } from "@/lib/format-time";
+import { formatDateSeparator, formatLastSeen } from "@/lib/format-time";
+import { layoutMessages } from "@/lib/message-groups";
 import { formatSystemMessage } from "@/lib/system-message";
+import { cn } from "@/lib/utils";
 import { api } from "../../../convex/_generated/api";
 import { CallBubble } from "./call-bubble";
 import { ChatBubble } from "./chat-bubble";
@@ -60,6 +62,20 @@ export function ChatView({ conversation }: ChatViewProps) {
 		{ initialNumItems: MESSAGES_PAGE_SIZE },
 	);
 	const messages = useMemo(() => [...results].reverse(), [results]);
+
+	// Day dividers and same-sender blocks are derived, never stored: the layout
+	// of a message depends only on its neighbours.
+	const layout = useMemo(
+		() =>
+			layoutMessages(
+				messages.map((msg) => ({
+					senderId: msg.type === "system" ? null : msg.senderId,
+					timestamp: msg._creationTime,
+					isPlain: msg.type !== "system" && msg.type !== "call",
+				})),
+			),
+		[messages],
+	);
 
 	const markAsRead = useMutation(api.conversations.markAsRead);
 	const toggleReaction = useMutation(api.messages.toggleReaction);
@@ -132,16 +148,16 @@ export function ChatView({ conversation }: ChatViewProps) {
 	return (
 		<div className="flex h-full flex-col">
 			{/* Header */}
-			<div className="border-b border-border bg-card/80 pt-safe backdrop-blur-md">
-				<div className="flex h-16 items-center gap-2 px-2 sm:gap-3 sm:px-4">
+			<div className="z-20 border-b border-border bg-surface pt-safe">
+				<div className="flex h-14 items-center gap-1 px-2 sm:px-3">
 					<Button
 						variant="ghost"
 						size="icon"
 						aria-label="Retour aux conversations"
-						className="h-10 w-10 flex-shrink-0 rounded-full md:hidden"
+						className="size-9 flex-shrink-0 rounded-lg md:hidden"
 						onClick={() => router.push("/chat")}
 					>
-						<ArrowLeft className="h-5 w-5" />
+						<ArrowLeft className="size-5" />
 					</Button>
 
 					<button
@@ -153,26 +169,21 @@ export function ChatView({ conversation }: ChatViewProps) {
 								setShowGroupInfo(!showGroupInfo);
 							}
 						}}
-						className="flex min-w-0 items-center gap-3 rounded-full py-1 pr-3 transition-opacity hover:opacity-80"
+						className="flex min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-accent"
 					>
 						<UserAvatar
 							src={otherDmMember?.image}
 							fallback={headerDisplayName}
 							isOnline={otherDmMember?.isOnline}
 							isGroup={conversation.type === "group"}
+							size="sm"
 						/>
 						<div className="min-w-0 text-left">
-							<h2 className="truncate text-sm font-semibold">
+							<h2 className="truncate text-sm font-semibold leading-tight">
 								{headerDisplayName}
 							</h2>
-							<p className="truncate text-xs text-muted-foreground">
-								{otherDmMember?.isOnline ? (
-									<span className="text-green-600 dark:text-green-500">
-										{statusText}
-									</span>
-								) : (
-									statusText
-								)}
+							<p className="mt-0.5 truncate text-xs text-muted-foreground">
+								{statusText}
 							</p>
 						</div>
 					</button>
@@ -182,37 +193,29 @@ export function ChatView({ conversation }: ChatViewProps) {
 					{/* Calls are 1:1 only — hidden for groups */}
 					{conversation.type === "dm" && (
 						<>
-							<Button
-								variant="ghost"
-								size="icon"
-								aria-label="Appel audio"
-								className="h-10 w-10 flex-shrink-0 rounded-full"
+							<HeaderAction
+								label="Appel audio"
 								onClick={() => void startCall(conversationId, "audio")}
 							>
-								<Phone className="h-5 w-5" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon"
-								aria-label="Appel vidéo"
-								className="h-10 w-10 flex-shrink-0 rounded-full"
+								<Phone className="size-[18px]" />
+							</HeaderAction>
+							<HeaderAction
+								label="Appel vidéo"
 								onClick={() => void startCall(conversationId, "video")}
 							>
-								<Video className="h-5 w-5" />
-							</Button>
+								<Video className="size-[18px]" />
+							</HeaderAction>
 						</>
 					)}
 
 					{conversation.type === "group" && (
-						<Button
-							variant="ghost"
-							size="icon"
-							aria-label="Infos du groupe"
-							className="h-10 w-10 flex-shrink-0 rounded-full"
+						<HeaderAction
+							label="Infos du groupe"
+							active={showGroupInfo}
 							onClick={() => setShowGroupInfo(!showGroupInfo)}
 						>
-							<Users className="h-5 w-5" />
-						</Button>
+							<Users className="size-[18px]" />
+						</HeaderAction>
 					)}
 				</div>
 			</div>
@@ -229,95 +232,117 @@ export function ChatView({ conversation }: ChatViewProps) {
 						onScroll={handleScroll}
 						className="flex-1 overflow-y-auto px-3 py-4 sm:px-6"
 					>
-						<div className="mx-auto max-w-3xl space-y-1">
+						<div className="mx-auto w-full max-w-[68rem]">
 							{status === "LoadingMore" && (
 								<div className="flex justify-center py-2">
-									<div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+									<div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
 								</div>
 							)}
 							{status === "Exhausted" && messages.length > 0 && (
-								<p className="py-2 text-center text-[11px] text-muted-foreground">
+								<p className="pb-4 text-center text-[11px] text-muted-foreground">
 									Début de la conversation
 								</p>
 							)}
-							{messages.map((msg) =>
-								msg.type === "system" ? (
-									<div key={msg._id} className="flex justify-center py-1.5">
-										<span className="rounded-full bg-muted px-3 py-1 text-center text-[11px] text-muted-foreground">
-											{formatSystemMessage(msg.system, msg.content)}
-										</span>
-									</div>
-								) : msg.type === "call" && msg.callData ? (
-									<CallBubble
-										key={msg._id}
-										callType={msg.callData.callType}
-										status={msg.callData.status}
-										duration={msg.callData.duration}
-										isOwn={msg.isOwn}
-										timestamp={msg._creationTime}
-										senderName={
-											msg.sender?.displayName ??
-											msg.sender?.name ??
-											msg.sender?.username ??
-											UNKNOWN_NAME
-										}
-									/>
-								) : (
-									<div
-										key={msg._id}
-										ref={(el) => {
-											if (el) messageRefs.current.set(msg._id, el);
-											else messageRefs.current.delete(msg._id);
-										}}
-									>
-										<ChatBubble
-											content={msg.content}
-											sender={msg.sender}
-											isOwn={msg.isOwn}
-											isRead={msg.isRead}
-											timestamp={msg._creationTime}
-											showSender={conversation.type === "group"}
-											onSenderClick={
-												!msg.isOwn && msg.sender
-													? () => setProfileUser(msg.sender)
-													: undefined
-											}
-											isPinned={msg.pinnedAt != null}
-											reactions={msg.reactions}
-											replyTo={
-												msg.replyTo
-													? {
-															...msg.replyTo,
-															senderName:
-																msg.replyTo.senderName ?? UNKNOWN_NAME,
+							{messages.map((msg, index) => {
+								const { startsBlock, endsBlock, startsDay } = layout[index];
+								const isFirst = index === 0;
+
+								return (
+									<div key={msg._id}>
+										{startsDay && (
+											<DaySeparator timestamp={msg._creationTime} />
+										)}
+										<div
+											className={cn(
+												startsBlock && !isFirst && "mt-4",
+												!startsBlock && "mt-1",
+											)}
+										>
+											{msg.type === "system" ? (
+												<div className="flex justify-center py-1.5">
+													<span className="px-3 text-center text-[11px] text-muted-foreground">
+														{formatSystemMessage(msg.system, msg.content)}
+													</span>
+												</div>
+											) : msg.type === "call" && msg.callData ? (
+												<CallBubble
+													callType={msg.callData.callType}
+													status={msg.callData.status}
+													duration={msg.callData.duration}
+													isOwn={msg.isOwn}
+													timestamp={msg._creationTime}
+													senderName={
+														msg.sender?.displayName ??
+														msg.sender?.name ??
+														msg.sender?.username ??
+														UNKNOWN_NAME
+													}
+												/>
+											) : (
+												<div
+													ref={(el) => {
+														if (el) messageRefs.current.set(msg._id, el);
+														else messageRefs.current.delete(msg._id);
+													}}
+												>
+													<ChatBubble
+														content={msg.content}
+														sender={msg.sender}
+														isOwn={msg.isOwn}
+														isRead={msg.isRead}
+														timestamp={msg._creationTime}
+														showSender={conversation.type === "group"}
+														startsBlock={startsBlock}
+														endsBlock={endsBlock}
+														onSenderClick={
+															!msg.isOwn && msg.sender
+																? () => setProfileUser(msg.sender)
+																: undefined
 														}
-													: null
-											}
-											isHighlighted={highlightedId === msg._id}
-											onReact={(emoji) =>
-												void toggleReaction({ messageId: msg._id, emoji })
-											}
-											onReply={() =>
-												setReplyTo({
-													messageId: msg._id,
-													senderName: msg.isOwn
-														? "Toi"
-														: (msg.sender?.displayName ??
-															msg.sender?.name ??
-															msg.sender?.username ??
-															UNKNOWN_NAME),
-													content: msg.content,
-												})
-											}
-											onTogglePin={() => void togglePin({ messageId: msg._id })}
-											onDeleteForMe={() =>
-												void deleteForMe({ messageId: msg._id })
-											}
-											onJumpToMessage={jumpToMessage}
-										/>
+														isPinned={msg.pinnedAt != null}
+														reactions={msg.reactions}
+														replyTo={
+															msg.replyTo
+																? {
+																		...msg.replyTo,
+																		senderName:
+																			msg.replyTo.senderName ?? UNKNOWN_NAME,
+																	}
+																: null
+														}
+														isHighlighted={highlightedId === msg._id}
+														onReact={(emoji) =>
+															void toggleReaction({
+																messageId: msg._id,
+																emoji,
+															})
+														}
+														onReply={() =>
+															setReplyTo({
+																messageId: msg._id,
+																senderName: msg.isOwn
+																	? "Toi"
+																	: (msg.sender?.displayName ??
+																		msg.sender?.name ??
+																		msg.sender?.username ??
+																		UNKNOWN_NAME),
+																content: msg.content,
+															})
+														}
+														onTogglePin={() =>
+															void togglePin({ messageId: msg._id })
+														}
+														onDeleteForMe={() =>
+															void deleteForMe({ messageId: msg._id })
+														}
+														onJumpToMessage={jumpToMessage}
+													/>
+												</div>
+											)}
+										</div>
 									</div>
-								),
-							)}
+								);
+							})}
 							<TypingIndicator conversationId={conversationId} />
 						</div>
 					</div>
@@ -334,10 +359,10 @@ export function ChatView({ conversation }: ChatViewProps) {
 						<button
 							type="button"
 							aria-label="Fermer les infos du groupe"
-							className="absolute inset-0 z-30 bg-black/40 lg:hidden"
+							className="absolute inset-0 z-30 bg-foreground/30 backdrop-blur-sm lg:hidden"
 							onClick={() => setShowGroupInfo(false)}
 						/>
-						<div className="absolute inset-y-0 right-0 z-40 w-full max-w-xs shadow-xl lg:static lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none">
+						<div className="absolute inset-y-0 right-0 z-40 w-full max-w-xs shadow-e3 lg:static lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none">
 							<GroupInfo
 								conversation={conversation}
 								onClose={() => setShowGroupInfo(false)}
@@ -356,6 +381,48 @@ export function ChatView({ conversation }: ChatViewProps) {
 					if (!open) setProfileUser(null);
 				}}
 			/>
+		</div>
+	);
+}
+
+function HeaderAction({
+	label,
+	active,
+	onClick,
+	children,
+}: {
+	label: string;
+	active?: boolean;
+	onClick: () => void;
+	children: React.ReactNode;
+}) {
+	return (
+		<Button
+			variant="ghost"
+			size="icon"
+			aria-label={label}
+			onClick={onClick}
+			className={cn(
+				"size-9 flex-shrink-0 rounded-lg transition-colors",
+				active
+					? "bg-primary-subtle text-primary"
+					: "text-muted-foreground hover:text-foreground",
+			)}
+		>
+			{children}
+		</Button>
+	);
+}
+
+/** Day divider — a hairline rule with the date sitting in it. */
+function DaySeparator({ timestamp }: { timestamp: number }) {
+	return (
+		<div className="flex items-center gap-3 py-4">
+			<span className="h-px flex-1 bg-border" />
+			<span className="text-[11px] font-medium text-muted-foreground">
+				{formatDateSeparator(timestamp)}
+			</span>
+			<span className="h-px flex-1 bg-border" />
 		</div>
 	);
 }

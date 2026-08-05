@@ -66,7 +66,7 @@ export function MessageActions({
 			<DropdownMenuTrigger
 				aria-label="Actions du message"
 				className={cn(
-					"flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground",
+					"flex size-7 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground",
 					"opacity-0 focus-visible:opacity-100 group-hover/bubble:opacity-100 data-popup-open:opacity-100",
 				)}
 			>
@@ -142,8 +142,9 @@ export function MessageActions({
 									aria-pressed={myReactions.includes(emoji)}
 									onClick={() => react(emoji)}
 									className={cn(
-										"flex h-8 w-8 items-center justify-center rounded-full text-lg transition-transform hover:scale-110 hover:bg-accent",
-										myReactions.includes(emoji) && "bg-accent ring-1 ring-ring",
+										"flex size-8 items-center justify-center rounded-md text-lg transition-colors hover:bg-accent",
+										myReactions.includes(emoji) &&
+											"bg-primary-subtle ring-1 ring-primary/40",
 									)}
 								>
 									{emoji}
@@ -153,7 +154,7 @@ export function MessageActions({
 								type="button"
 								aria-label="Plus d'emojis"
 								onClick={() => setShowPicker(true)}
-								className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition-transform hover:scale-110 hover:bg-accent hover:text-foreground"
+								className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 							>
 								<Plus className="h-4 w-4" />
 							</button>

@@ -5,6 +5,7 @@ import { AlertCircle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { ChatView } from "@/components/chat/chat-view";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { api } from "../../../../../convex/_generated/api";
 
 /**
@@ -23,7 +24,7 @@ export default function ConversationPage() {
 	if (conversation === undefined) {
 		return (
 			<div className="flex h-full items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+				<Spinner size="lg" />
 			</div>
 		);
 	}
@@ -31,14 +32,22 @@ export default function ConversationPage() {
 	if (conversation === null) {
 		return (
 			<div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-				<AlertCircle className="h-10 w-10 text-muted-foreground" />
+				<span className="flex size-14 items-center justify-center rounded-2xl bg-surface text-muted-foreground shadow-e1 ring-1 ring-border/60">
+					<AlertCircle className="size-7" />
+				</span>
 				<div>
-					<p className="font-medium">Conversation introuvable</p>
-					<p className="text-sm text-muted-foreground">
+					<p className="text-base font-semibold tracking-tight">
+						Conversation introuvable
+					</p>
+					<p className="mt-1 text-sm text-muted-foreground">
 						Cette conversation n&apos;existe pas ou tu n&apos;y as plus accès.
 					</p>
 				</div>
-				<Button variant="outline" onClick={() => router.replace("/chat")}>
+				<Button
+					variant="outline"
+					size="xl"
+					onClick={() => router.replace("/chat")}
+				>
 					Retour aux conversations
 				</Button>
 			</div>

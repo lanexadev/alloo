@@ -4,6 +4,7 @@ import { useConvexAuth, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { CallProvider } from "@/components/call/call-provider";
+import { FullPageSpinner } from "@/components/ui/spinner";
 import { api } from "../../../convex/_generated/api";
 
 export default function ChatLayout({ children }: { children: ReactNode }) {
@@ -44,11 +45,7 @@ export default function ChatLayout({ children }: { children: ReactNode }) {
 	}, [isAuthenticated, setOnlineStatus]);
 
 	if (isLoading) {
-		return (
-			<div className="flex h-dvh items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-			</div>
-		);
+		return <FullPageSpinner />;
 	}
 
 	if (!isAuthenticated) return null;

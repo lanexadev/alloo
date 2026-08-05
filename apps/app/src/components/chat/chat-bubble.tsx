@@ -32,6 +32,10 @@ interface ChatBubbleProps {
 	isRead?: boolean;
 	timestamp: number;
 	showSender: boolean;
+	/** First message of a same-sender block — carries the name. */
+	startsBlock: boolean;
+	/** Last message of a block — carries the tail, avatar and timestamp. */
+	endsBlock: boolean;
 	onSenderClick?: () => void;
 	isPinned: boolean;
 	reactions: ReactionGroup[];
@@ -44,6 +48,17 @@ interface ChatBubbleProps {
 	onJumpToMessage?: (messageId: string) => void;
 }
 
+/** Corner rounding that welds a block of messages into one column. */
+function bubbleCorners(
+	isOwn: boolean,
+	startsBlock: boolean,
+	endsBlock: boolean,
+): string {
+	const tail = isOwn ? "rounded-br-md" : "rounded-bl-md";
+	const seam = isOwn ? "rounded-tr-md" : "rounded-tl-md";
+	return cn("rounded-bubble", endsBlock && tail, !startsBlock && seam);
+}
+
 export const ChatBubble = memo(function ChatBubble({
 	content,
 	sender,
@@ -51,6 +66,8 @@ export const ChatBubble = memo(function ChatBubble({
 	isRead,
 	timestamp,
 	showSender,
+	startsBlock,
+	endsBlock,
 	onSenderClick,
 	isPinned,
 	reactions = [],
@@ -101,62 +118,69 @@ export const ChatBubble = memo(function ChatBubble({
 		.filter((reaction) => reaction.reactedByMe)
 		.map((reaction) => reaction.emoji);
 
+	const actions = (
+		<div className="mt-1 flex items-start self-start">
+			<MessageActions
+				open={menuOpen}
+				onOpenChange={setMenuOpen}
+				isOwn={isOwn}
+				isPinned={isPinned}
+				myReactions={myReactions}
+				onReact={onReact}
+				onReply={onReply}
+				onCopy={handleCopy}
+				onTranslate={() => void translate()}
+				onTogglePin={onTogglePin}
+				onDeleteForMe={onDeleteForMe}
+			/>
+		</div>
+	);
+
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 8 }}
+			initial={{ opacity: 0, y: 6 }}
 			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.15 }}
+			transition={{ duration: 0.16, ease: "easeOut" }}
 			className={cn(
-				"group/bubble flex gap-2 rounded-xl transition-colors",
+				"group/bubble flex gap-2 rounded-lg transition-colors",
 				isOwn ? "justify-end" : "justify-start",
-				isHighlighted && "bg-primary/10",
+				isHighlighted && "bg-primary-subtle",
 			)}
 		>
-			{/* Avatar for received messages in groups */}
-			{showSender && !isOwn && sender && (
-				<button
-					type="button"
-					onClick={onSenderClick}
-					className="mt-auto flex-shrink-0 hover:opacity-80 transition-opacity"
-				>
-					<UserAvatar
-						src={sender.image}
-						fallback={senderDisplayName}
-						size="xs"
-					/>
-				</button>
-			)}
-
-			{/* Actions trigger sits on the text side of own messages */}
-			{isOwn && (
-				<div className="mt-1 flex items-start self-start">
-					<MessageActions
-						open={menuOpen}
-						onOpenChange={setMenuOpen}
-						isOwn={isOwn}
-						isPinned={isPinned}
-						myReactions={myReactions}
-						onReact={onReact}
-						onReply={onReply}
-						onCopy={handleCopy}
-						onTranslate={() => void translate()}
-						onTogglePin={onTogglePin}
-						onDeleteForMe={onDeleteForMe}
-					/>
+			{/* Avatar column for received messages in groups — reserved even when
+			    empty so a stacked block stays aligned under its author. */}
+			{showSender && !isOwn && (
+				<div className="w-9 flex-shrink-0 self-end">
+					{endsBlock && sender && (
+						<button
+							type="button"
+							onClick={onSenderClick}
+							className="transition-opacity hover:opacity-80"
+						>
+							<UserAvatar
+								src={sender.image}
+								fallback={senderDisplayName}
+								size="sm"
+							/>
+						</button>
+					)}
 				</div>
 			)}
 
+			{/* Actions trigger sits on the text side of own messages */}
+			{isOwn && actions}
+
 			<div
 				className={cn(
-					"max-w-[85%] space-y-0.5 sm:max-w-[70%]",
+					"flex max-w-[85%] flex-col sm:max-w-[62%]",
 					isOwn ? "items-end" : "items-start",
 				)}
 			>
-				{showSender && !isOwn && sender && (
+				{showSender && !isOwn && sender && startsBlock && (
 					<button
 						type="button"
 						onClick={onSenderClick}
-						className="ml-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+						className="mb-1 ml-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
 					>
 						{senderDisplayName}
 					</button>
@@ -172,10 +196,11 @@ export const ChatBubble = memo(function ChatBubble({
 						setMenuOpen(true);
 					}}
 					className={cn(
-						"whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-[15px] leading-relaxed shadow-sm sm:text-sm",
+						"whitespace-pre-wrap break-words px-3.5 py-2 text-[15px] leading-normal sm:text-sm",
+						bubbleCorners(isOwn, startsBlock, endsBlock),
 						isOwn
-							? "rounded-br-md bg-primary text-primary-foreground"
-							: "rounded-bl-md bg-card text-foreground ring-1 ring-border dark:bg-muted dark:ring-0",
+							? "bg-primary text-primary-foreground"
+							: "border border-border bg-bubble-in text-foreground dark:border-transparent",
 					)}
 				>
 					{replyTo && (
@@ -183,10 +208,10 @@ export const ChatBubble = memo(function ChatBubble({
 							type="button"
 							onClick={() => onJumpToMessage?.(replyTo._id)}
 							className={cn(
-								"mb-1.5 block w-full rounded-lg border-l-2 px-2.5 py-1.5 text-left text-xs",
+								"mb-1.5 block w-full rounded-md border-l-2 px-2 py-1 text-left text-xs",
 								isOwn
-									? "border-primary-foreground/50 bg-primary-foreground/10"
-									: "border-primary bg-muted/60 dark:bg-background/30",
+									? "border-primary-foreground/50 bg-primary-foreground/12"
+									: "border-primary bg-muted/70 dark:bg-background/30",
 							)}
 						>
 							<span
@@ -213,8 +238,8 @@ export const ChatBubble = memo(function ChatBubble({
 					{translation.status !== "idle" && (
 						<div
 							className={cn(
-								"mt-1.5 border-t pt-1.5 text-sm",
-								isOwn ? "border-primary-foreground/20" : "border-border",
+								"mt-2 border-t pt-2 text-sm",
+								isOwn ? "border-primary-foreground/25" : "border-border",
 							)}
 						>
 							{translation.status === "loading" && (
@@ -246,13 +271,13 @@ export const ChatBubble = memo(function ChatBubble({
 									{translation.text}
 									<span
 										className={cn(
-											"mt-0.5 flex items-center gap-1 text-[10px]",
+											"mt-1 flex items-center gap-1 text-[10px]",
 											isOwn
 												? "text-primary-foreground/70"
 												: "text-muted-foreground",
 										)}
 									>
-										<Languages className="h-3 w-3" /> Traduit ·{" "}
+										<Languages className="size-3" /> Traduit ·{" "}
 										<button
 											type="button"
 											onClick={resetTranslation}
@@ -266,45 +291,38 @@ export const ChatBubble = memo(function ChatBubble({
 						</div>
 					)}
 				</div>
+
 				<MessageReactions
 					reactions={reactions}
 					isOwn={isOwn}
 					onToggle={onReact}
 				/>
-				<div
-					className={cn(
-						"flex items-center gap-1 px-1",
-						isOwn ? "justify-end" : "justify-start",
-					)}
-				>
-					{isPinned && <Pin className="h-3 w-3 text-primary" />}
-					<span className="text-[10px] text-muted-foreground">{time}</span>
-					{isOwn &&
-						(isRead ? (
-							<CheckCheck className="h-3.5 w-3.5 text-blue-500" />
-						) : (
-							<Check className="h-3.5 w-3.5 text-muted-foreground" />
-						))}
-				</div>
+
+				{/* Only the last message of a block is stamped — a block of six
+				    one-word messages should not carry six timestamps. */}
+				{(endsBlock || isPinned) && (
+					<div
+						className={cn(
+							"mt-0.5 flex items-center gap-1 px-0.5",
+							isOwn ? "justify-end" : "justify-start",
+						)}
+					>
+						{isPinned && <Pin className="size-3 text-muted-foreground" />}
+						<span className="text-[11px] tabular-nums text-muted-foreground">
+							{time}
+						</span>
+						{isOwn &&
+							endsBlock &&
+							(isRead ? (
+								<CheckCheck className="size-3.5 text-primary" />
+							) : (
+								<Check className="size-3.5 text-muted-foreground" />
+							))}
+					</div>
+				)}
 			</div>
 
-			{!isOwn && (
-				<div className="mt-1 flex items-start self-start">
-					<MessageActions
-						open={menuOpen}
-						onOpenChange={setMenuOpen}
-						isOwn={isOwn}
-						isPinned={isPinned}
-						myReactions={myReactions}
-						onReact={onReact}
-						onReply={onReply}
-						onCopy={handleCopy}
-						onTranslate={() => void translate()}
-						onTogglePin={onTogglePin}
-						onDeleteForMe={onDeleteForMe}
-					/>
-				</div>
-			)}
+			{!isOwn && actions}
 		</motion.div>
 	);
 });

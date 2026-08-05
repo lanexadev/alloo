@@ -38,8 +38,8 @@ export function VideoGrid({
 		remoteStream !== null && remoteStream.getVideoTracks().length > 0;
 
 	return (
-		<div className="relative flex-1 p-2">
-			<div className="relative h-full w-full overflow-hidden rounded-xl bg-black/40">
+		<div className="relative flex-1 p-3">
+			<div className="relative h-full w-full overflow-hidden rounded-3xl bg-black/40 ring-1 ring-white/10">
 				{hasRemoteVideo ? (
 					// biome-ignore lint/a11y/useMediaCaption: live WebRTC stream has no caption track
 					<video
@@ -50,17 +50,17 @@ export function VideoGrid({
 					/>
 				) : (
 					<div className="flex h-full w-full items-center justify-center">
-						<div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/10">
-							<span className="text-3xl font-semibold text-white/60">
+						<div className="flex size-24 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md">
+							<span className="text-3xl font-semibold text-white/70">
 								{remoteName[0]?.toUpperCase() ?? "?"}
 							</span>
 						</div>
 					</div>
 				)}
 
-				<div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md bg-black/50 px-2 py-1">
-					<span className="text-xs font-medium text-white">{remoteName}</span>
-					{remoteIsMuted && <MicOff className="h-3 w-3 text-red-400" />}
+				<div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 backdrop-blur-md">
+					<span className="text-xs font-semibold text-white">{remoteName}</span>
+					{remoteIsMuted && <MicOff className="size-3 text-red-400" />}
 				</div>
 			</div>
 
@@ -70,7 +70,7 @@ export function VideoGrid({
 					initial={{ opacity: 0, scale: 0.8 }}
 					animate={{ opacity: 1, scale: 1 }}
 					transition={{ duration: 0.2 }}
-					className="absolute bottom-4 right-4 z-10 h-32 w-24 overflow-hidden rounded-xl border-2 border-white/20 shadow-xl sm:h-40 sm:w-30"
+					className="absolute bottom-6 right-6 z-10 h-32 w-24 overflow-hidden rounded-2xl shadow-2xl ring-2 ring-white/25 sm:h-40 sm:w-30"
 				>
 					{localStream ? (
 						<video

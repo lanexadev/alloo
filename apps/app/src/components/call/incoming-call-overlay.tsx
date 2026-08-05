@@ -24,7 +24,7 @@ export function IncomingCallOverlay({
 			initial={{ opacity: 0 }}
 			animate={{ opacity: 1 }}
 			exit={{ opacity: 0 }}
-			className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900"
+			className="bg-[oklch(0.16_0.008_260)] fixed inset-0 z-50 flex flex-col items-center justify-center"
 		>
 			{/* Animated background rings */}
 			<div className="absolute inset-0 flex items-center justify-center overflow-hidden">
@@ -55,12 +55,12 @@ export function IncomingCallOverlay({
 					initial={{ opacity: 0, y: -10 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ delay: 0.1 }}
-					className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5"
+					className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 ring-1 ring-white/10 backdrop-blur-md"
 				>
-					<PhoneIncoming className="h-4 w-4 text-green-400" />
-					<span className="text-sm text-white/80">
+					<PhoneIncoming className="size-4 text-online" />
+					<span className="text-sm font-medium text-white/80">
 						{callType === "video"
-							? "Appel video entrant"
+							? "Appel vidéo entrant"
 							: "Appel audio entrant"}
 					</span>
 				</motion.div>
@@ -74,8 +74,8 @@ export function IncomingCallOverlay({
 						ease: "easeInOut",
 					}}
 				>
-					<div className="rounded-full p-1 ring-2 ring-white/20">
-						<UserAvatar src={callerImage} fallback={callerName} size="lg" />
+					<div className="rounded-full p-1 ring-2 ring-white/25">
+						<UserAvatar src={callerImage} fallback={callerName} size="xl" />
 					</div>
 				</motion.div>
 
@@ -86,7 +86,9 @@ export function IncomingCallOverlay({
 					transition={{ delay: 0.2 }}
 					className="text-center"
 				>
-					<h2 className="text-xl font-semibold text-white">{callerName}</h2>
+					<h2 className="text-xl font-semibold tracking-tight text-white">
+						{callerName}
+					</h2>
 					<motion.p
 						animate={{ opacity: [0.5, 1, 0.5] }}
 						transition={{
@@ -97,8 +99,8 @@ export function IncomingCallOverlay({
 						className="mt-1 text-sm text-white/60"
 					>
 						{callType === "video"
-							? "Appel video entrant..."
-							: "Appel audio entrant..."}
+							? "Appel vidéo entrant…"
+							: "Appel audio entrant…"}
 					</motion.p>
 				</motion.div>
 
@@ -115,11 +117,11 @@ export function IncomingCallOverlay({
 							type="button"
 							whileTap={{ scale: 0.9 }}
 							onClick={onDecline}
-							className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/30 transition-colors hover:bg-red-600"
+							className="flex size-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/30 transition-colors hover:bg-red-600"
 						>
-							<PhoneOff className="h-7 w-7" />
+							<PhoneOff className="size-7" />
 						</motion.button>
-						<span className="text-xs text-white/50">Refuser</span>
+						<span className="text-xs font-medium text-white/60">Refuser</span>
 					</div>
 
 					{/* Accept */}
@@ -139,11 +141,11 @@ export function IncomingCallOverlay({
 								ease: "easeOut",
 							}}
 							onClick={onAccept}
-							className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500 text-white shadow-lg shadow-green-500/30 transition-colors hover:bg-green-600"
+							className="flex size-16 items-center justify-center rounded-full bg-green-500 text-white shadow-lg shadow-green-500/30 transition-colors hover:bg-green-600"
 						>
-							<Phone className="h-7 w-7" />
+							<Phone className="size-7" />
 						</motion.button>
-						<span className="text-xs text-white/50">Accepter</span>
+						<span className="text-xs font-medium text-white/60">Accepter</span>
 					</div>
 				</motion.div>
 			</div>

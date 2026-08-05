@@ -14,6 +14,9 @@ import type { Id } from "../../../../convex/_generated/dataModel";
  * state, so deep links, browser back/forward and a page refresh all work. This
  * layout keeps the sidebar mounted across navigations; `children` is the right
  * pane (the empty state at `/chat`, a conversation at `/chat/<id>`).
+ *
+ * Full-bleed by design: the app owns the whole viewport. On mobile only one
+ * pane is visible at a time; both show from `md` up.
  */
 export default function ChatShellLayout({ children }: { children: ReactNode }) {
 	const { user, isLoading } = useCurrentUser();
@@ -42,11 +45,10 @@ export default function ChatShellLayout({ children }: { children: ReactNode }) {
 	}, [user, isLoading, router]);
 
 	return (
-		<div className="flex h-dvh overflow-hidden bg-background">
-			{/* On mobile only one pane is visible at a time; both show from md up. */}
+		<div className="flex h-dvh overflow-hidden bg-canvas">
 			<div
 				className={cn(
-					"w-full flex-shrink-0 border-border md:block md:w-80 md:border-r lg:w-[360px] xl:w-[400px]",
+					"w-full flex-shrink-0 border-border md:block md:w-[312px] md:border-r lg:w-[344px] xl:w-[376px]",
 					selectedConversation ? "hidden" : "block",
 				)}
 			>

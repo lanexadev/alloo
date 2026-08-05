@@ -5,8 +5,10 @@ import { Camera, Loader2, User } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { AuthShell } from "@/components/layout/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FullPageSpinner } from "@/components/ui/spinner";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { api } from "../../../../convex/_generated/api";
 
@@ -108,142 +110,141 @@ export default function SetupProfilePage() {
 	};
 
 	if (isLoading) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-			</div>
-		);
+		return <FullPageSpinner />;
 	}
 
 	return (
-		<div className="flex min-h-screen items-center justify-center px-4 py-12">
-			<div className="mx-auto w-full max-w-md space-y-8">
-				{/* Header */}
-				<div className="text-center">
-					<h1 className="text-2xl font-bold">Configure ton profil</h1>
-					<p className="mt-1 text-sm text-muted-foreground">
-						Comment les autres te verront sur Alloo
+		<AuthShell
+			title="Ton profil"
+			subtitle="Voilà comment les autres te verront sur Alloo."
+		>
+			{/* Avatar upload */}
+			<div className="flex justify-center">
+				<div className="relative">
+					<button
+						type="button"
+						onClick={() => fileInputRef.current?.click()}
+						aria-label="Choisir une photo de profil"
+						className="group relative flex size-28 items-center justify-center overflow-hidden rounded-full bg-surface-sunken ring-1 ring-border transition-colors hover:bg-accent"
+					>
+						{avatarPreview ? (
+							<Image
+								src={avatarPreview}
+								alt="Avatar"
+								fill
+								className="object-cover"
+							/>
+						) : (
+							<User className="size-11 text-muted-foreground" />
+						)}
+						<span className="absolute inset-0 flex items-center justify-center bg-foreground/0 transition-colors group-hover:bg-foreground/40">
+							{uploadingAvatar ? (
+								<Loader2 className="size-6 animate-spin text-white" />
+							) : (
+								<Camera className="size-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+							)}
+						</span>
+					</button>
+					<span className="pointer-events-none absolute bottom-0 right-0 flex size-8 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground">
+						<Camera className="size-4" />
+					</span>
+					<input
+						ref={fileInputRef}
+						type="file"
+						accept="image/*"
+						onChange={handleAvatarSelect}
+						className="hidden"
+					/>
+				</div>
+			</div>
+
+			<form onSubmit={handleSubmit} className="space-y-5">
+				{/* Username (required) */}
+				<div>
+					<label
+						htmlFor="username"
+						className="mb-1.5 block text-sm font-semibold"
+					>
+						Username <span className="text-destructive">*</span>
+					</label>
+					<div className="relative">
+						<span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+							@
+						</span>
+						<Input
+							inputSize="lg"
+							id="username"
+							type="text"
+							placeholder="ton_username"
+							value={username}
+							onChange={(e) =>
+								setUsername(e.target.value.toLowerCase().replace(/\s/g, "_"))
+							}
+							className="pl-9"
+							minLength={3}
+							maxLength={20}
+							required
+							autoFocus
+						/>
+					</div>
+					<p className="mt-1.5 text-xs text-muted-foreground">
+						3-20 caractères · lettres, chiffres, _
 					</p>
 				</div>
 
-				{/* Avatar upload */}
-				<div className="flex justify-center">
-					<div className="relative">
-						<button
-							type="button"
-							onClick={() => fileInputRef.current?.click()}
-							className="group relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-muted transition-colors hover:bg-muted/80"
-						>
-							{avatarPreview ? (
-								<Image
-									src={avatarPreview}
-									alt="Avatar"
-									fill
-									className="object-cover"
-								/>
-							) : (
-								<User className="h-12 w-12 text-muted-foreground" />
-							)}
-							<div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
-								{uploadingAvatar ? (
-									<Loader2 className="h-6 w-6 animate-spin text-white opacity-0 group-hover:opacity-100" />
-								) : (
-									<Camera className="h-6 w-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
-								)}
-							</div>
-						</button>
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept="image/*"
-							onChange={handleAvatarSelect}
-							className="hidden"
-						/>
-					</div>
+				{/* Display Name (optional) */}
+				<div>
+					<label
+						htmlFor="displayName"
+						className="mb-1.5 block text-sm font-semibold"
+					>
+						Nom d&apos;affichage
+					</label>
+					<Input
+						inputSize="lg"
+						id="displayName"
+						type="text"
+						placeholder={user?.name ?? "Comment tu veux qu'on t'appelle"}
+						value={displayName}
+						onChange={(e) => setDisplayName(e.target.value)}
+						maxLength={50}
+					/>
 				</div>
 
-				<form onSubmit={handleSubmit} className="space-y-5">
-					{/* Username (required) */}
-					<div>
-						<label
-							htmlFor="username"
-							className="mb-1.5 block text-sm font-medium"
-						>
-							Username <span className="text-destructive">*</span>
-						</label>
-						<div className="relative">
-							<span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-								@
-							</span>
-							<Input
-								id="username"
-								type="text"
-								placeholder="ton_username"
-								value={username}
-								onChange={(e) =>
-									setUsername(e.target.value.toLowerCase().replace(/\s/g, "_"))
-								}
-								className="pl-8"
-								minLength={3}
-								maxLength={20}
-								required
-								autoFocus
-							/>
-						</div>
-						<p className="mt-1 text-xs text-muted-foreground">
-							3-20 caractères · lettres, chiffres, _
-						</p>
-					</div>
+				{/* Bio (optional) */}
+				<div>
+					<label htmlFor="bio" className="mb-1.5 block text-sm font-semibold">
+						Bio
+					</label>
+					<textarea
+						id="bio"
+						placeholder="Dis quelque chose sur toi…"
+						value={bio}
+						onChange={(e) => setBio(e.target.value)}
+						maxLength={160}
+						rows={3}
+						className="w-full resize-none rounded-xl border border-input bg-surface px-4 py-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+					/>
+					<p className="mt-1 text-right text-xs text-muted-foreground">
+						{bio.length}/160
+					</p>
+				</div>
 
-					{/* Display Name (optional) */}
-					<div>
-						<label
-							htmlFor="displayName"
-							className="mb-1.5 block text-sm font-medium"
-						>
-							Nom d&apos;affichage
-						</label>
-						<Input
-							id="displayName"
-							type="text"
-							placeholder={user?.name ?? "Comment tu veux qu'on t'appelle"}
-							value={displayName}
-							onChange={(e) => setDisplayName(e.target.value)}
-							maxLength={50}
-						/>
-					</div>
+				{error && (
+					<p role="alert" className="text-sm text-destructive">
+						{error}
+					</p>
+				)}
 
-					{/* Bio (optional) */}
-					<div>
-						<label htmlFor="bio" className="mb-1.5 block text-sm font-medium">
-							Bio
-						</label>
-						<textarea
-							id="bio"
-							placeholder="Dis quelque chose sur toi..."
-							value={bio}
-							onChange={(e) => setBio(e.target.value)}
-							maxLength={160}
-							rows={3}
-							className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
-						/>
-						<p className="mt-0.5 text-right text-xs text-muted-foreground">
-							{bio.length}/160
-						</p>
-					</div>
-
-					{error && <p className="text-sm text-destructive">{error}</p>}
-
-					<Button
-						type="submit"
-						className="w-full"
-						size="lg"
-						disabled={loading || uploadingAvatar}
-					>
-						{loading ? "..." : "Continuer"}
-					</Button>
-				</form>
-			</div>
-		</div>
+				<Button
+					type="submit"
+					size="xl"
+					className="w-full"
+					disabled={loading || uploadingAvatar}
+				>
+					{loading ? "Un instant…" : "Continuer"}
+				</Button>
+			</form>
+		</AuthShell>
 	);
 }

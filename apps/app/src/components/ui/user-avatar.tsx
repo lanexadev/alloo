@@ -10,15 +10,16 @@ interface UserAvatarProps {
 	fallback: string;
 	isOnline?: boolean;
 	isGroup?: boolean;
-	size?: "xs" | "sm" | "md" | "lg";
+	size?: "xs" | "sm" | "md" | "lg" | "xl";
 	className?: string;
 }
 
 const sizeMap = {
-	xs: "h-6 w-6",
-	sm: "h-8 w-8",
-	md: "h-10 w-10",
-	lg: "h-14 w-14",
+	xs: "size-6",
+	sm: "size-9",
+	md: "size-10",
+	lg: "size-14",
+	xl: "size-20",
 };
 
 const textSizeMap = {
@@ -26,20 +27,23 @@ const textSizeMap = {
 	sm: "text-xs",
 	md: "text-sm",
 	lg: "text-lg",
+	xl: "text-2xl",
 };
 
 const dotSizeMap = {
-	xs: "h-1.5 w-1.5 border",
-	sm: "h-2.5 w-2.5 border-2",
-	md: "h-3 w-3 border-2",
-	lg: "h-3.5 w-3.5 border-2",
+	xs: "size-2 ring-2",
+	sm: "size-2.5 ring-2",
+	md: "size-2.5 ring-2",
+	lg: "size-3.5 ring-[3px]",
+	xl: "size-4 ring-4",
 };
 
 const iconSizeMap = {
-	xs: "h-3 w-3",
-	sm: "h-4 w-4",
-	md: "h-5 w-5",
-	lg: "h-6 w-6",
+	xs: "size-3",
+	sm: "size-4",
+	md: "size-[18px]",
+	lg: "size-6",
+	xl: "size-8",
 };
 
 export function UserAvatar({
@@ -66,7 +70,13 @@ export function UserAvatar({
 					/>
 				) : (
 					<AvatarFallback
-						className={cn("bg-primary/10 text-primary", textSizeMap[size])}
+						className={cn(
+							"font-medium",
+							textSizeMap[size],
+							isGroup
+								? "bg-primary text-primary-foreground"
+								: "bg-primary/10 text-primary",
+						)}
 					>
 						{isGroup ? <Users className={iconSizeMap[size]} /> : initial}
 					</AvatarFallback>
@@ -75,9 +85,9 @@ export function UserAvatar({
 			{isOnline !== undefined && !isGroup && (
 				<span
 					className={cn(
-						"absolute -bottom-0.5 -right-0.5 rounded-full border-card",
+						"absolute bottom-0 right-0 rounded-full ring-surface",
 						dotSizeMap[size],
-						isOnline ? "bg-green-500" : "bg-muted-foreground/40",
+						isOnline ? "bg-online" : "bg-muted-foreground/40",
 					)}
 				/>
 			)}

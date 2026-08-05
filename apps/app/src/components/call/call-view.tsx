@@ -35,7 +35,7 @@ function AudioWaveAnimation() {
 			{[0, 1, 2, 3, 4].map((i) => (
 				<motion.div
 					key={i}
-					className="w-1 rounded-full bg-primary"
+					className="w-1 rounded-full bg-white/70"
 					animate={{ height: [8, 24, 8] }}
 					transition={{
 						duration: 0.8,
@@ -92,7 +92,7 @@ export function CallView({
 			initial={{ opacity: 0 }}
 			animate={{ opacity: 1 }}
 			exit={{ opacity: 0 }}
-			className="fixed inset-0 z-50 flex flex-col bg-gray-900"
+			className="bg-[oklch(0.16_0.008_260)] fixed inset-0 z-50 flex flex-col"
 		>
 			{/* Header */}
 			<motion.div
@@ -102,17 +102,17 @@ export function CallView({
 				className="flex items-center justify-between px-4 py-3"
 			>
 				<div className="flex items-center gap-3">
-					<div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1">
+					<div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/10 backdrop-blur-md">
 						{isVideoCall ? (
-							<Video className="h-3.5 w-3.5 text-white/70" />
+							<Video className="size-3.5 text-white/70" />
 						) : (
-							<Phone className="h-3.5 w-3.5 text-white/70" />
+							<Phone className="size-3.5 text-white/70" />
 						)}
-						<span className="text-xs font-medium text-white/70">
+						<span className="text-xs font-semibold text-white/70">
 							{isVideoCall ? "Vidéo" : "Audio"}
 						</span>
 					</div>
-					<span className="text-sm font-semibold text-white">{remoteName}</span>
+					<span className="text-sm font-bold text-white">{remoteName}</span>
 				</div>
 
 				<div className="text-sm text-white/60">
@@ -157,18 +157,18 @@ export function CallView({
 						>
 							<div
 								className={cn(
-									"flex h-28 w-28 items-center justify-center rounded-full",
-									"bg-gradient-to-br from-primary/20 to-primary/5",
-									"ring-2 ring-primary/20",
+									"flex size-32 items-center justify-center rounded-full",
+									"bg-white/10 backdrop-blur-md",
+									"ring-1 ring-white/20",
 								)}
 							>
-								<span className="text-4xl font-bold text-white/80">
+								<span className="text-5xl font-semibold text-white/85">
 									{remoteName[0]?.toUpperCase() ?? "?"}
 								</span>
 							</div>
 							{phase === "connected" && (
 								<motion.div
-									className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-2 border-gray-900 bg-green-500"
+									className="absolute -bottom-1 -right-1 size-5 rounded-full bg-online ring-4 ring-black/30"
 									animate={{ scale: [1, 1.2, 1] }}
 									transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
 								/>
@@ -176,7 +176,9 @@ export function CallView({
 						</motion.div>
 
 						<div className="text-center">
-							<h3 className="text-lg font-semibold text-white">{remoteName}</h3>
+							<h3 className="text-lg font-semibold tracking-tight text-white">
+								{remoteName}
+							</h3>
 							{showTimer ? (
 								<div className="mt-3">
 									<AudioWaveAnimation />

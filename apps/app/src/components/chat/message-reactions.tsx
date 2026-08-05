@@ -24,7 +24,7 @@ export function MessageReactions({
 	return (
 		<div
 			className={cn(
-				"-mt-1.5 flex flex-wrap gap-1 px-1",
+				"-mt-2 flex flex-wrap gap-1 px-1",
 				isOwn ? "justify-end" : "justify-start",
 			)}
 		>
@@ -36,15 +36,15 @@ export function MessageReactions({
 					aria-pressed={r.reactedByMe}
 					onClick={() => onToggle(r.emoji)}
 					className={cn(
-						"flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs shadow-sm transition-colors",
+						"flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
 						r.reactedByMe
-							? "border-primary/40 bg-primary/10"
-							: "border-border bg-card hover:bg-accent",
+							? "border-primary/40 bg-primary-subtle"
+							: "border-border bg-surface hover:bg-accent",
 					)}
 				>
 					<span className="text-sm leading-none">{r.emoji}</span>
 					{r.count > 1 && (
-						<span className="text-[10px] font-medium text-muted-foreground">
+						<span className="text-[10px] font-semibold text-muted-foreground">
 							{r.count}
 						</span>
 					)}
