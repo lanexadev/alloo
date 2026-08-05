@@ -11,8 +11,11 @@
 import type * as auth from "../auth.js";
 import type * as calls from "../calls.js";
 import type * as conversations from "../conversations.js";
+import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
+import type * as rateLimiter from "../rateLimiter.js";
+import type * as turn from "../turn.js";
 import type * as users from "../users.js";
 
 import type {
@@ -25,8 +28,11 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   calls: typeof calls;
   conversations: typeof conversations;
+  helpers: typeof helpers;
   http: typeof http;
   messages: typeof messages;
+  rateLimiter: typeof rateLimiter;
+  turn: typeof turn;
   users: typeof users;
 }>;
 
