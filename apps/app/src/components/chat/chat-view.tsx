@@ -1,15 +1,24 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { AlertCircle, ArrowLeft, Phone, Users, Video } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useMutation, usePaginatedQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import { ArrowLeft, Phone, Users, Video } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useCallContext } from "@/components/call/call-provider";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { formatLastSeen } from "@/lib/format-time";
+import { formatSystemMessage } from "@/lib/system-message";
 import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
 import { CallBubble } from "./call-bubble";
 import { ChatBubble } from "./chat-bubble";
 import { ChatInput, type ReplyTarget } from "./chat-input";
@@ -18,24 +27,52 @@ import { PinnedBanner } from "./pinned-banner";
 import { TypingIndicator } from "./typing-indicator";
 import { UserProfileDialog } from "./user-profile-dialog";
 
+/** Messages fetched per page. One page covers more than a tall desktop viewport. */
+const MESSAGES_PAGE_SIZE = 40;
+/** Distance from the top of the scroller that triggers loading older messages. */
+const LOAD_MORE_THRESHOLD_PX = 240;
+const HIGHLIGHT_DURATION_MS = 1600;
+const UNKNOWN_NAME = "Inconnu";
+
+type Conversation = NonNullable<
+	FunctionReturnType<typeof api.conversations.get>
+>;
+type Message = FunctionReturnType<typeof api.messages.list>["page"][number];
+type ProfileUser =
+	| Conversation["members"][number]
+	| NonNullable<Message["sender"]>;
+
 interface ChatViewProps {
-	conversationId: Id<"conversations">;
-	onBack: () => void;
+	conversation: Conversation;
 }
 
-export function ChatView({ conversationId, onBack }: ChatViewProps) {
-	const messages = useQuery(api.messages.list, { conversationId });
-	const conversation = useQuery(api.conversations.get, { conversationId });
+export function ChatView({ conversation }: ChatViewProps) {
+	const conversationId = conversation._id;
+	const router = useRouter();
+	const { user } = useCurrentUser();
+	const { startCall } = useCallContext();
+
+	// Paginated, newest-first on the wire. New messages land in the first page, so
+	// the open view stays reactive without ever loading the whole history.
+	const { results, status, loadMore } = usePaginatedQuery(
+		api.messages.list,
+		{ conversationId },
+		{ initialNumItems: MESSAGES_PAGE_SIZE },
+	);
+	const messages = useMemo(() => [...results].reverse(), [results]);
+
 	const markAsRead = useMutation(api.conversations.markAsRead);
 	const toggleReaction = useMutation(api.messages.toggleReaction);
 	const togglePin = useMutation(api.messages.togglePin);
 	const deleteForMe = useMutation(api.messages.deleteForMe);
-	const { user } = useCurrentUser();
-	const { startCall } = useCallContext();
+
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const messageRefs = useRef(new Map<string, HTMLDivElement>());
+	/** Scroll height captured just before older messages are prepended. */
+	const heightBeforeLoadMore = useRef<number | null>(null);
+
 	const [showGroupInfo, setShowGroupInfo] = useState(false);
-	const [profileUser, setProfileUser] = useState<any>(null);
+	const [profileUser, setProfileUser] = useState<ProfileUser | null>(null);
 	const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
 	const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
@@ -44,61 +81,52 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 		if (!el) return;
 		el.scrollIntoView({ behavior: "smooth", block: "center" });
 		setHighlightedId(messageId);
-		setTimeout(() => setHighlightedId(null), 1600);
+		setTimeout(() => setHighlightedId(null), HIGHLIGHT_DURATION_MS);
 	}, []);
 
+	const newestMessageId = messages.at(-1)?._id ?? null;
+
+	// Stick to the bottom for new messages only. Prepending older ones must not
+	// yank the reader back down.
 	useEffect(() => {
-		if (messages && messages.length > 0) {
-			scrollRef.current?.scrollTo({
-				top: scrollRef.current.scrollHeight,
-				behavior: "smooth",
-			});
-			void markAsRead({ conversationId }).catch(() => {});
-		}
-	}, [messages, conversationId, markAsRead]);
+		if (!newestMessageId) return;
+		scrollRef.current?.scrollTo({
+			top: scrollRef.current.scrollHeight,
+			behavior: "smooth",
+		});
+		void markAsRead({ conversationId }).catch(() => {});
+	}, [newestMessageId, conversationId, markAsRead]);
 
-	if (conversation === undefined) {
-		return (
-			<div className="flex h-full items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-			</div>
-		);
-	}
+	// Keep the reader anchored on the same message after older ones are prepended.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `messages` is the trigger, not a value read here — the correction must run right after the list grows
+	useLayoutEffect(() => {
+		const el = scrollRef.current;
+		const previousHeight = heightBeforeLoadMore.current;
+		if (!el || previousHeight === null) return;
+		el.scrollTop += el.scrollHeight - previousHeight;
+		heightBeforeLoadMore.current = null;
+	}, [messages]);
 
-	if (conversation === null) {
-		return (
-			<div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-				<AlertCircle className="h-10 w-10 text-muted-foreground" />
-				<div>
-					<p className="font-medium">Conversation introuvable</p>
-					<p className="text-sm text-muted-foreground">
-						Cette conversation n&apos;existe pas ou tu n&apos;y as plus accès.
-					</p>
-				</div>
-				<Button variant="outline" onClick={onBack}>
-					Retour
-				</Button>
-			</div>
-		);
-	}
+	const handleScroll = useCallback(() => {
+		const el = scrollRef.current;
+		if (!el || status !== "CanLoadMore") return;
+		if (el.scrollTop > LOAD_MORE_THRESHOLD_PX) return;
+		heightBeforeLoadMore.current = el.scrollHeight;
+		loadMore(MESSAGES_PAGE_SIZE);
+	}, [status, loadMore]);
 
 	const otherDmMember =
 		conversation.type === "dm" && user
-			? conversation.members.find((m: any) => m && m._id !== user._id)
+			? (conversation.members.find((m) => m._id !== user._id) ?? null)
 			: null;
 
-	const headerDisplayName =
-		conversation.type === "dm" && otherDmMember
-			? ((otherDmMember as any).displayName ??
-				otherDmMember.username ??
-				conversation.displayName)
-			: conversation.displayName;
+	const headerDisplayName = conversation.displayName ?? UNKNOWN_NAME;
 
 	const statusText =
 		conversation.type === "dm" && otherDmMember
 			? otherDmMember.isOnline
 				? "En ligne"
-				: formatLastSeen((otherDmMember as any).lastSeenAt)
+				: formatLastSeen(otherDmMember.lastSeenAt)
 			: `${conversation.members.length} membres`;
 
 	return (
@@ -111,7 +139,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 						size="icon"
 						aria-label="Retour aux conversations"
 						className="h-10 w-10 flex-shrink-0 rounded-full md:hidden"
-						onClick={onBack}
+						onClick={() => router.push("/chat")}
 					>
 						<ArrowLeft className="h-5 w-5" />
 					</Button>
@@ -128,12 +156,8 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 						className="flex min-w-0 items-center gap-3 rounded-full py-1 pr-3 transition-opacity hover:opacity-80"
 					>
 						<UserAvatar
-							src={
-								conversation.type === "dm"
-									? (otherDmMember as any)?.image
-									: undefined
-							}
-							fallback={headerDisplayName ?? "?"}
+							src={otherDmMember?.image}
+							fallback={headerDisplayName}
 							isOnline={otherDmMember?.isOnline}
 							isGroup={conversation.type === "group"}
 						/>
@@ -202,14 +226,25 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 					/>
 					<div
 						ref={scrollRef}
+						onScroll={handleScroll}
 						className="flex-1 overflow-y-auto px-3 py-4 sm:px-6"
 					>
 						<div className="mx-auto max-w-3xl space-y-1">
-							{messages?.map((msg) =>
+							{status === "LoadingMore" && (
+								<div className="flex justify-center py-2">
+									<div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+								</div>
+							)}
+							{status === "Exhausted" && messages.length > 0 && (
+								<p className="py-2 text-center text-[11px] text-muted-foreground">
+									Début de la conversation
+								</p>
+							)}
+							{messages.map((msg) =>
 								msg.type === "system" ? (
 									<div key={msg._id} className="flex justify-center py-1.5">
 										<span className="rounded-full bg-muted px-3 py-1 text-center text-[11px] text-muted-foreground">
-											{msg.content}
+											{formatSystemMessage(msg.system, msg.content)}
 										</span>
 									</div>
 								) : msg.type === "call" && msg.callData ? (
@@ -224,7 +259,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 											msg.sender?.displayName ??
 											msg.sender?.name ??
 											msg.sender?.username ??
-											"Inconnu"
+											UNKNOWN_NAME
 										}
 									/>
 								) : (
@@ -249,7 +284,15 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 											}
 											isPinned={msg.pinnedAt != null}
 											reactions={msg.reactions}
-											replyTo={msg.replyTo}
+											replyTo={
+												msg.replyTo
+													? {
+															...msg.replyTo,
+															senderName:
+																msg.replyTo.senderName ?? UNKNOWN_NAME,
+														}
+													: null
+											}
 											isHighlighted={highlightedId === msg._id}
 											onReact={(emoji) =>
 												void toggleReaction({ messageId: msg._id, emoji })
@@ -262,7 +305,7 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 														: (msg.sender?.displayName ??
 															msg.sender?.name ??
 															msg.sender?.username ??
-															"Inconnu"),
+															UNKNOWN_NAME),
 													content: msg.content,
 												})
 											}
@@ -294,11 +337,11 @@ export function ChatView({ conversationId, onBack }: ChatViewProps) {
 							className="absolute inset-0 z-30 bg-black/40 lg:hidden"
 							onClick={() => setShowGroupInfo(false)}
 						/>
-						<div className="absolute inset-y-0 right-0 z-40 w-full max-w-xs shadow-xl lg:static lg:z-auto lg:max-w-none lg:w-auto lg:shadow-none">
+						<div className="absolute inset-y-0 right-0 z-40 w-full max-w-xs shadow-xl lg:static lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none">
 							<GroupInfo
 								conversation={conversation}
 								onClose={() => setShowGroupInfo(false)}
-								onMemberClick={(member: any) => setProfileUser(member)}
+								onMemberClick={setProfileUser}
 							/>
 						</div>
 					</>
