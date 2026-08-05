@@ -1,381 +1,439 @@
-import { v } from "convex/values";
-import { mutation, query, type QueryCtx, type MutationCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { paginationOptsValidator } from "convex/server";
+import { v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
+import {
+	type MutationCtx,
+	mutation,
+	type QueryCtx,
+	query,
+} from "./_generated/server";
+import {
+	getMembership,
+	requireMembership,
+	resolveSystemMessage,
+	UserCache,
+} from "./helpers";
+import { consumeToken, enforceRateLimit } from "./rateLimiter";
 
-async function getMembership(
-  ctx: QueryCtx | MutationCtx,
-  conversationId: Id<"conversations">,
-  userId: Id<"users">
-) {
-  const members = await ctx.db
-    .query("conversationMembers")
-    .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
-    .collect();
-  return members.find((m) => m.userId === userId) ?? null;
-}
+const MAX_MESSAGE_LENGTH = 4000;
+const MAX_EMOJI_LENGTH = 16;
+const TYPING_TTL_MS = 3000;
+
+/** A conversation showing more pinned messages than this is unusable anyway. */
+const MAX_PINNED_MESSAGES = 100;
 
 async function getTypingEntry(
-  ctx: QueryCtx | MutationCtx,
-  conversationId: Id<"conversations">,
-  userId: Id<"users">
+	ctx: QueryCtx | MutationCtx,
+	conversationId: Id<"conversations">,
+	userId: Id<"users">,
 ) {
-  const entries = await ctx.db
-    .query("typingIndicators")
-    .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
-    .collect();
-  return entries.find((e) => e.userId === userId) ?? null;
+	return await ctx.db
+		.query("typingIndicators")
+		.withIndex("by_conversation_user", (q) =>
+			q.eq("conversationId", conversationId).eq("userId", userId),
+		)
+		.unique();
 }
 
+/** True when this user hid the message via "delete for me". */
+async function isDeletedFor(
+	ctx: QueryCtx | MutationCtx,
+	messageId: Id<"messages">,
+	userId: Id<"users">,
+): Promise<boolean> {
+	const deletion = await ctx.db
+		.query("messageDeletions")
+		.withIndex("by_message_user", (q) =>
+			q.eq("messageId", messageId).eq("userId", userId),
+		)
+		.unique();
+	return deletion !== null;
+}
+
+/** Reactions for one message, grouped by emoji. */
+async function reactionsFor(
+	ctx: QueryCtx,
+	messageId: Id<"messages">,
+	userId: Id<"users">,
+) {
+	const docs = await ctx.db
+		.query("messageReactions")
+		.withIndex("by_message", (q) => q.eq("messageId", messageId))
+		.collect();
+
+	const groups = new Map<
+		string,
+		{ emoji: string; count: number; reactedByMe: boolean }
+	>();
+	for (const r of docs) {
+		const group = groups.get(r.emoji) ?? {
+			emoji: r.emoji,
+			count: 0,
+			reactedByMe: false,
+		};
+		group.count += 1;
+		if (r.userId === userId) group.reactedByMe = true;
+		groups.set(r.emoji, group);
+	}
+	return [...groups.values()];
+}
+
+/**
+ * Paginated conversation history, newest first.
+ *
+ * Reactive by construction: a new message lands at the top of page 1, so the
+ * open page updates without refetching the whole history. Every per-message read
+ * below (reactions, deletion flag, reply preview) is therefore bounded by the
+ * page size instead of the conversation length.
+ *
+ * Convex has no multi-key batch read, so those per-message reads stay separate
+ * queries — they run in parallel inside a single transaction, and bounding the
+ * page is what makes the cost constant.
+ */
 export const list = query({
-  args: { conversationId: v.id("conversations") },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+	args: {
+		conversationId: v.id("conversations"),
+		paginationOpts: paginationOptsValidator,
+	},
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) {
+			return { page: [], isDone: true, continueCursor: "" };
+		}
 
-    const membership = await getMembership(ctx, args.conversationId, userId);
-    if (!membership) return [];
+		const membership = await getMembership(ctx, args.conversationId, userId);
+		if (!membership) {
+			return { page: [], isDone: true, continueCursor: "" };
+		}
 
-    // Get other members' lastReadAt for read receipts
-    const allMembers = await ctx.db
-      .query("conversationMembers")
-      .withIndex("by_conversation", (q) =>
-        q.eq("conversationId", args.conversationId)
-      )
-      .collect();
-    const otherMembers = allMembers.filter((m) => m.userId !== userId);
+		// Read receipts need every member's `lastReadAt`; this reads member rows
+		// only, never their user documents.
+		const members = await ctx.db
+			.query("conversationMembers")
+			.withIndex("by_conversation", (q) =>
+				q.eq("conversationId", args.conversationId),
+			)
+			.collect();
+		const otherMembers = members.filter((m) => m.userId !== userId);
 
-    const allMessages = await ctx.db
-      .query("messages")
-      .withIndex("by_conversation", (q) =>
-        q.eq("conversationId", args.conversationId)
-      )
-      .order("asc")
-      .collect();
+		const result = await ctx.db
+			.query("messages")
+			.withIndex("by_conversation", (q) =>
+				q.eq("conversationId", args.conversationId),
+			)
+			.order("desc")
+			.paginate(args.paginationOpts);
 
-    // Hide messages the user deleted for themselves
-    const messages = allMessages.filter(
-      (msg) => !msg.deletedFor?.includes(userId)
-    );
+		const cache = new UserCache(ctx);
 
-    // Lookup table for reply previews (replied message may itself be hidden
-    // for this user — the preview is still shown, like in other messengers)
-    const messageById = new Map(allMessages.map((m) => [m._id, m]));
+		const decorated = await Promise.all(
+			result.page.map(async (msg) => {
+				if (await isDeletedFor(ctx, msg._id, userId)) return null;
 
-    // Deduplicate sender lookups
-    const senderCache = new Map<string, {
-      _id: Id<"users">;
-      username?: string;
-      displayName?: string;
-      name?: string;
-      image?: string;
-    } | null>();
+				const isOwn = msg.senderId === userId;
 
-    const messagesWithSender = await Promise.all(
-      messages.map(async (msg) => {
-        const senderId = msg.senderId as Id<"users">;
-        if (!senderCache.has(senderId)) {
-          const sender = await ctx.db.get(senderId);
-          senderCache.set(
-            senderId,
-            sender
-              ? {
-                  _id: sender._id as Id<"users">,
-                  username: sender.username,
-                  displayName: sender.displayName,
-                  name: sender.name,
-                  image: sender.image,
-                }
-              : null
-          );
-        }
-        const isOwn = senderId === userId;
+				// Reply preview. The quoted message may itself be hidden for this
+				// user — the preview still shows, like in other messengers.
+				let replyTo: {
+					_id: Id<"messages">;
+					content: string;
+					senderName: string | null;
+					isOwn: boolean;
+				} | null = null;
+				if (msg.replyToId) {
+					const replied = await ctx.db.get(msg.replyToId);
+					if (replied) {
+						replyTo = {
+							_id: replied._id,
+							content: replied.content,
+							senderName: await cache.displayName(replied.senderId),
+							isOwn: replied.senderId === userId,
+						};
+					}
+				}
 
-        // Reactions grouped by emoji
-        const reactionDocs = await ctx.db
-          .query("messageReactions")
-          .withIndex("by_message", (q) => q.eq("messageId", msg._id))
-          .collect();
-        const reactionGroups = new Map<
-          string,
-          { emoji: string; count: number; reactedByMe: boolean }
-        >();
-        for (const r of reactionDocs) {
-          const group = reactionGroups.get(r.emoji) ?? {
-            emoji: r.emoji,
-            count: 0,
-            reactedByMe: false,
-          };
-          group.count += 1;
-          if (r.userId === userId) group.reactedByMe = true;
-          reactionGroups.set(r.emoji, group);
-        }
+				return {
+					_id: msg._id,
+					_creationTime: msg._creationTime,
+					conversationId: msg.conversationId,
+					senderId: msg.senderId,
+					content: msg.content,
+					type: msg.type ?? "text",
+					pinnedAt: msg.pinnedAt,
+					pinnedBy: msg.pinnedBy,
+					callData: msg.callData,
+					system: msg.systemData
+						? await resolveSystemMessage(cache, msg.systemData)
+						: null,
+					// Legacy system messages stored a pre-rendered French sentence in
+					// `content`; it is still rendered for those.
+					sender: await cache.get(msg.senderId),
+					isOwn,
+					isRead:
+						isOwn &&
+						otherMembers.length > 0 &&
+						otherMembers.every(
+							(m) => m.lastReadAt != null && m.lastReadAt >= msg._creationTime,
+						),
+					reactions: await reactionsFor(ctx, msg._id, userId),
+					replyTo,
+				};
+			}),
+		);
 
-        // Reply preview
-        let replyTo = null;
-        if (msg.replyToId) {
-          const replied =
-            messageById.get(msg.replyToId) ?? (await ctx.db.get(msg.replyToId));
-          if (replied) {
-            const repliedSender = await ctx.db.get(
-              replied.senderId as Id<"users">
-            );
-            replyTo = {
-              _id: replied._id,
-              content: replied.content,
-              senderName:
-                repliedSender?.displayName ??
-                repliedSender?.name ??
-                repliedSender?.username ??
-                "Inconnu",
-              isOwn: replied.senderId === userId,
-            };
-          }
-        }
-
-        // Read receipt: check if all other members have read past this message
-        const isRead = isOwn
-          ? otherMembers.length > 0 &&
-            otherMembers.every(
-              (m) => m.lastReadAt != null && m.lastReadAt >= msg._creationTime
-            )
-          : false;
-
-        return {
-          ...msg,
-          sender: senderCache.get(senderId) ?? null,
-          isOwn,
-          isRead,
-          reactions: [...reactionGroups.values()],
-          replyTo,
-        };
-      })
-    );
-
-    return messagesWithSender;
-  },
+		return {
+			...result,
+			page: decorated.filter((m): m is NonNullable<typeof m> => m !== null),
+		};
+	},
 });
 
 export const send = mutation({
-  args: {
-    conversationId: v.id("conversations"),
-    content: v.string(),
-    replyToId: v.optional(v.id("messages")),
-  },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+	args: {
+		conversationId: v.id("conversations"),
+		content: v.string(),
+		replyToId: v.optional(v.id("messages")),
+	},
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) throw new Error("Not authenticated");
 
-    if (!args.content.trim()) throw new Error("Message cannot be empty");
-    if (args.content.length > 4000) throw new Error("Message too long");
+		const content = args.content.trim();
+		if (!content) throw new Error("Message cannot be empty");
+		if (content.length > MAX_MESSAGE_LENGTH) {
+			throw new Error("Message too long");
+		}
 
-    const membership = await getMembership(ctx, args.conversationId, userId);
-    if (!membership) throw new Error("Not a member of this conversation");
+		await requireMembership(ctx, args.conversationId, userId);
+		await enforceRateLimit(ctx, "sendMessage", userId);
 
-    if (args.replyToId) {
-      const replied = await ctx.db.get(args.replyToId);
-      if (!replied || replied.conversationId !== args.conversationId) {
-        throw new Error("Replied message not found in this conversation");
-      }
-    }
+		if (args.replyToId) {
+			const replied = await ctx.db.get(args.replyToId);
+			if (!replied || replied.conversationId !== args.conversationId) {
+				throw new Error("Replied message not found in this conversation");
+			}
+		}
 
-    await ctx.db.insert("messages", {
-      conversationId: args.conversationId,
-      senderId: userId,
-      content: args.content.trim(),
-      replyToId: args.replyToId,
-    });
+		await ctx.db.insert("messages", {
+			conversationId: args.conversationId,
+			senderId: userId,
+			content,
+			replyToId: args.replyToId,
+		});
 
-    await ctx.db.patch(args.conversationId, {
-      lastMessageAt: Date.now(),
-    });
+		await ctx.db.patch(args.conversationId, { lastMessageAt: Date.now() });
 
-    const typing = await getTypingEntry(ctx, args.conversationId, userId);
-    if (typing) await ctx.db.delete(typing._id);
-  },
+		const typing = await getTypingEntry(ctx, args.conversationId, userId);
+		if (typing) await ctx.db.delete(typing._id);
+	},
 });
 
 async function getAccessibleMessage(
-  ctx: QueryCtx | MutationCtx,
-  messageId: Id<"messages">,
-  userId: Id<"users">
-) {
-  const message = await ctx.db.get(messageId);
-  if (!message) throw new Error("Message not found");
-  const membership = await getMembership(ctx, message.conversationId, userId);
-  if (!membership) throw new Error("Not a member of this conversation");
-  return message;
+	ctx: QueryCtx | MutationCtx,
+	messageId: Id<"messages">,
+	userId: Id<"users">,
+): Promise<{ message: Doc<"messages">; role: "admin" | "member" }> {
+	const message = await ctx.db.get(messageId);
+	if (!message) throw new Error("Message not found");
+	const membership = await requireMembership(
+		ctx,
+		message.conversationId,
+		userId,
+	);
+	return { message, role: membership.role };
 }
 
 export const toggleReaction = mutation({
-  args: { messageId: v.id("messages"), emoji: v.string() },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
-    const emoji = args.emoji.trim();
-    if (!emoji || emoji.length > 16) {
-      throw new Error("Invalid emoji");
-    }
+	args: { messageId: v.id("messages"), emoji: v.string() },
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) throw new Error("Not authenticated");
+		const emoji = args.emoji.trim();
+		if (!emoji || emoji.length > MAX_EMOJI_LENGTH) {
+			throw new Error("Invalid emoji");
+		}
 
-    await getAccessibleMessage(ctx, args.messageId, userId);
+		await getAccessibleMessage(ctx, args.messageId, userId);
+		await enforceRateLimit(ctx, "toggleReaction", userId);
 
-    // Each user can add several different reactions to a message. The same
-    // message/user/emoji tuple remains a toggle, so duplicate reactions cannot
-    // be created by repeatedly selecting the same emoji.
-    const existing = await ctx.db
-      .query("messageReactions")
-      .withIndex("by_message_user_emoji", (q) =>
-        q
-          .eq("messageId", args.messageId)
-          .eq("userId", userId)
-          .eq("emoji", emoji)
-      )
-      .unique();
+		// Each user can add several different reactions to a message. The same
+		// message/user/emoji tuple remains a toggle, so duplicate reactions cannot
+		// be created by repeatedly selecting the same emoji.
+		const existing = await ctx.db
+			.query("messageReactions")
+			.withIndex("by_message_user_emoji", (q) =>
+				q
+					.eq("messageId", args.messageId)
+					.eq("userId", userId)
+					.eq("emoji", emoji),
+			)
+			.unique();
 
-    if (existing) {
-      await ctx.db.delete(existing._id);
-      return;
-    }
+		if (existing) {
+			await ctx.db.delete(existing._id);
+			return;
+		}
 
-    await ctx.db.insert("messageReactions", {
-      messageId: args.messageId,
-      userId,
-      emoji,
-    });
-  },
+		await ctx.db.insert("messageReactions", {
+			messageId: args.messageId,
+			userId,
+			emoji,
+		});
+	},
 });
 
 export const deleteForMe = mutation({
-  args: { messageId: v.id("messages") },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+	args: { messageId: v.id("messages") },
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) throw new Error("Not authenticated");
 
-    const message = await getAccessibleMessage(ctx, args.messageId, userId);
-    const deletedFor = message.deletedFor ?? [];
-    if (!deletedFor.includes(userId)) {
-      await ctx.db.patch(args.messageId, {
-        deletedFor: [...deletedFor, userId],
-      });
-    }
-  },
+		const { message } = await getAccessibleMessage(ctx, args.messageId, userId);
+
+		// One row per (message, user) instead of an array on the message, which in a
+		// 100-member group would accumulate 100 ids on every single message.
+		if (await isDeletedFor(ctx, args.messageId, userId)) return;
+
+		await ctx.db.insert("messageDeletions", {
+			messageId: args.messageId,
+			userId,
+			conversationId: message.conversationId,
+		});
+	},
 });
 
 export const togglePin = mutation({
-  args: { messageId: v.id("messages") },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+	args: { messageId: v.id("messages") },
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) throw new Error("Not authenticated");
 
-    const message = await getAccessibleMessage(ctx, args.messageId, userId);
-    if (message.pinnedAt != null) {
-      await ctx.db.patch(args.messageId, {
-        pinnedAt: undefined,
-        pinnedBy: undefined,
-      });
-    } else {
-      await ctx.db.patch(args.messageId, {
-        pinnedAt: Date.now(),
-        pinnedBy: userId,
-      });
-    }
-  },
+		const { message, role } = await getAccessibleMessage(
+			ctx,
+			args.messageId,
+			userId,
+		);
+
+		if (message.pinnedAt == null) {
+			await ctx.db.patch(args.messageId, {
+				pinnedAt: Date.now(),
+				pinnedBy: userId,
+			});
+			return;
+		}
+
+		// Any member may pin, but unpinning someone else's pin is an admin action.
+		// DMs have no admins, so both participants can always unpin there.
+		const conversation = await ctx.db.get(message.conversationId);
+		const canUnpin =
+			message.pinnedBy === userId ||
+			role === "admin" ||
+			conversation?.type === "dm";
+		if (!canUnpin) {
+			throw new Error("Only an admin or the member who pinned it can unpin");
+		}
+
+		await ctx.db.patch(args.messageId, {
+			pinnedAt: undefined,
+			pinnedBy: undefined,
+		});
+	},
 });
 
 export const listPinned = query({
-  args: { conversationId: v.id("conversations") },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+	args: { conversationId: v.id("conversations") },
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) return [];
 
-    const membership = await getMembership(ctx, args.conversationId, userId);
-    if (!membership) return [];
+		const membership = await getMembership(ctx, args.conversationId, userId);
+		if (!membership) return [];
 
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_conversation", (q) =>
-        q.eq("conversationId", args.conversationId)
-      )
-      .collect();
+		// `by_conversation_pinned` is ordered by `pinnedAt`, so this reads pinned
+		// messages only instead of the whole conversation.
+		const pinned = await ctx.db
+			.query("messages")
+			.withIndex("by_conversation_pinned", (q) =>
+				q.eq("conversationId", args.conversationId).gt("pinnedAt", 0),
+			)
+			.order("desc")
+			.take(MAX_PINNED_MESSAGES);
 
-    const pinned = messages
-      .filter(
-        (m) => m.pinnedAt != null && !m.deletedFor?.includes(userId)
-      )
-      .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0));
+		const cache = new UserCache(ctx);
 
-    return Promise.all(
-      pinned.map(async (m) => {
-        const sender = await ctx.db.get(m.senderId as Id<"users">);
-        return {
-          _id: m._id,
-          content: m.content,
-          pinnedAt: m.pinnedAt as number,
-          senderName:
-            sender?.displayName ??
-            sender?.name ??
-            sender?.username ??
-            "Inconnu",
-        };
-      })
-    );
-  },
+		const visible = await Promise.all(
+			pinned.map(async (m) => {
+				if (m.pinnedAt == null) return null;
+				if (await isDeletedFor(ctx, m._id, userId)) return null;
+				return {
+					_id: m._id,
+					content: m.content,
+					pinnedAt: m.pinnedAt,
+					pinnedBy: m.pinnedBy,
+					senderName: await cache.displayName(m.senderId),
+					canUnpin: m.pinnedBy === userId || membership.role === "admin",
+				};
+			}),
+		);
+
+		return visible.filter((m): m is NonNullable<typeof m> => m !== null);
+	},
 });
 
 export const setTyping = mutation({
-  args: { conversationId: v.id("conversations") },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return;
+	args: { conversationId: v.id("conversations") },
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) return;
 
-    // Verify membership
-    const membership = await getMembership(ctx, args.conversationId, userId);
-    if (!membership) return;
+		const membership = await getMembership(ctx, args.conversationId, userId);
+		if (!membership) return;
 
-    const existing = await getTypingEntry(ctx, args.conversationId, userId);
-    const expiresAt = Date.now() + 3000;
+		// Typing pings are fire-and-forget from the client, so an exceeded limit is
+		// dropped silently rather than surfaced as a failed keystroke.
+		if ((await consumeToken(ctx, "setTyping", userId)) !== null) return;
 
-    if (existing) {
-      await ctx.db.patch(existing._id, { expiresAt });
-    } else {
-      await ctx.db.insert("typingIndicators", {
-        conversationId: args.conversationId,
-        userId,
-        expiresAt,
-      });
-    }
-  },
+		const existing = await getTypingEntry(ctx, args.conversationId, userId);
+		const expiresAt = Date.now() + TYPING_TTL_MS;
+
+		if (existing) {
+			await ctx.db.patch(existing._id, { expiresAt });
+		} else {
+			await ctx.db.insert("typingIndicators", {
+				conversationId: args.conversationId,
+				userId,
+				expiresAt,
+			});
+		}
+	},
 });
 
 export const getTypingUsers = query({
-  args: { conversationId: v.id("conversations") },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+	args: { conversationId: v.id("conversations") },
+	handler: async (ctx, args) => {
+		const userId = await getAuthUserId(ctx);
+		if (!userId) return [];
 
-    // Verify membership
-    const membership = await getMembership(ctx, args.conversationId, userId);
-    if (!membership) return [];
+		const membership = await getMembership(ctx, args.conversationId, userId);
+		if (!membership) return [];
 
-    const now = Date.now();
-    const indicators = await ctx.db
-      .query("typingIndicators")
-      .withIndex("by_conversation", (q) =>
-        q.eq("conversationId", args.conversationId)
-      )
-      .collect();
+		const now = Date.now();
+		const indicators = await ctx.db
+			.query("typingIndicators")
+			.withIndex("by_conversation", (q) =>
+				q.eq("conversationId", args.conversationId),
+			)
+			.collect();
 
-    const activeTypers = indicators.filter(
-      (i) => i.userId !== userId && i.expiresAt > now
-    );
+		const cache = new UserCache(ctx);
+		const activeTypers = indicators.filter(
+			(i) => i.userId !== userId && i.expiresAt > now,
+		);
 
-    const users = await Promise.all(
-      activeTypers.map(async (i) => {
-        const user = await ctx.db.get(i.userId as Id<"users">);
-        return user?.username ?? user?.name ?? "Someone";
-      })
-    );
-
-    return users;
-  },
+		const names = await Promise.all(
+			activeTypers.map((i) => cache.displayName(i.userId)),
+		);
+		return names.filter((name): name is string => name !== null);
+	},
 });

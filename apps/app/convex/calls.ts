@@ -7,6 +7,7 @@ import {
 	type QueryCtx,
 	query,
 } from "./_generated/server";
+import { getMembership, toPublicUser } from "./helpers";
 
 /**
  * 1:1 call system (DM only).
@@ -36,19 +37,6 @@ async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
 	const userId = await getAuthUserId(ctx);
 	if (!userId) throw new Error("Not authenticated");
 	return userId;
-}
-
-async function getMembership(
-	ctx: QueryCtx | MutationCtx,
-	conversationId: Id<"conversations">,
-	userId: Id<"users">,
-) {
-	return await ctx.db
-		.query("conversationMembers")
-		.withIndex("by_conversation_user", (q) =>
-			q.eq("conversationId", conversationId).eq("userId", userId),
-		)
-		.unique();
 }
 
 async function getParticipant(
@@ -383,21 +371,7 @@ export const participants = query({
 		return await Promise.all(
 			callParticipants.map(async (p) => {
 				const user = await ctx.db.get(p.userId);
-				return {
-					...p,
-					user: user
-						? {
-								_id: user._id,
-								username: user.username,
-								displayName: user.displayName,
-								image: user.image,
-								isOnline:
-									user.isOnline === true &&
-									user.lastSeenAt != null &&
-									Date.now() - user.lastSeenAt < 60_000,
-							}
-						: null,
-				};
+				return { ...p, user: user ? toPublicUser(user) : null };
 			}),
 		);
 	},
@@ -435,7 +409,7 @@ export const incomingCall = query({
 		if (!ringing) return null;
 
 		const call = await ctx.db.get(ringing.callId);
-		if (!call || call.status !== "ringing") return null;
+		if (call?.status !== "ringing") return null;
 
 		const conversation = await ctx.db.get(call.conversationId);
 		if (!conversation) return null;
