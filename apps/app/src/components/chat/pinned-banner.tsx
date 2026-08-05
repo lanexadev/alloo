@@ -42,11 +42,13 @@ export function PinnedBanner({
 						className="min-w-0 flex-1 text-left transition-opacity hover:opacity-70"
 					>
 						<span className="block truncate text-xs">
-							<span className="font-medium">{msg.senderName}</span>
+							<span className="font-medium">{msg.senderName ?? "Inconnu"}</span>
 							<span className="text-muted-foreground"> · {msg.content}</span>
 						</span>
 					</button>
-					{expanded && (
+					{/* Unpinning someone else's pin is an admin action; the backend
+					    enforces it and `canUnpin` mirrors the rule here. */}
+					{expanded && msg.canUnpin && (
 						<button
 							type="button"
 							aria-label="Désépingler ce message"
