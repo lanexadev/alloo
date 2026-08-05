@@ -20,6 +20,7 @@ import {
 	type SelectableUser,
 	UserMultiSelect,
 } from "@/components/chat/user-multi-select";
+import { AccountDialog } from "@/components/profile/account-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -62,6 +63,7 @@ export function Sidebar({ selectedConversation }: SidebarProps) {
 	const { signOut } = useAuthActions();
 	const [showNewDM, setShowNewDM] = useState(false);
 	const [showNewGroup, setShowNewGroup] = useState(false);
+	const [showAccount, setShowAccount] = useState(false);
 	const [filter, setFilter] = useState("");
 	const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
 
@@ -257,26 +259,36 @@ export function Sidebar({ selectedConversation }: SidebarProps) {
 
 			{/* Current user */}
 			<div className="border-t border-border pb-safe">
-				<div className="flex h-16 items-center gap-2.5 pl-3 pr-2">
-					<UserAvatar
-						src={user?.image}
-						fallback={user?.displayName ?? user?.username ?? user?.name ?? "?"}
-						size="sm"
-						isOnline
-					/>
-					<div className="min-w-0 flex-1">
-						<p className="truncate text-sm font-medium">
-							{user?.displayName ??
-								user?.username ??
-								user?.name ??
-								"Utilisateur"}
-						</p>
-						{user?.username && (
-							<p className="truncate text-xs text-muted-foreground">
-								@{user.username}
+				<div className="flex h-16 items-center gap-1 pl-2 pr-2">
+					{/* The avatar is where people look for their own settings. */}
+					<button
+						type="button"
+						onClick={() => setShowAccount(true)}
+						aria-label="Mon compte"
+						className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-accent"
+					>
+						<UserAvatar
+							src={user?.image}
+							fallback={
+								user?.displayName ?? user?.username ?? user?.name ?? "?"
+							}
+							size="sm"
+							isOnline
+						/>
+						<div className="min-w-0 flex-1">
+							<p className="truncate text-sm font-medium">
+								{user?.displayName ??
+									user?.username ??
+									user?.name ??
+									"Utilisateur"}
 							</p>
-						)}
-					</div>
+							{user?.username && (
+								<p className="truncate text-xs text-muted-foreground">
+									@{user.username}
+								</p>
+							)}
+						</div>
+					</button>
 					<IconButton
 						label="Changer de thème"
 						onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -296,6 +308,8 @@ export function Sidebar({ selectedConversation }: SidebarProps) {
 					</IconButton>
 				</div>
 			</div>
+
+			<AccountDialog open={showAccount} onOpenChange={setShowAccount} />
 		</div>
 	);
 }
