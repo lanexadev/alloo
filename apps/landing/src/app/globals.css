@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/* Alloo blue — same tokens as apps/app, trimmed to what the landing needs. */
+@theme {
+	--font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+
+	--color-background: oklch(0.988 0.003 255);
+	--color-foreground: oklch(0.19 0.02 260);
+	--color-card: oklch(1 0 0);
+	--color-primary: oklch(0.55 0.21 262);
+	--color-primary-foreground: oklch(0.99 0 0);
+	--color-muted-foreground: oklch(0.5 0.025 260);
+	--color-border: oklch(0.915 0.012 255);
+
+	--radius-brand: 1.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+	@theme {
+		--color-background: oklch(0.155 0.015 262);
+		--color-foreground: oklch(0.96 0.005 255);
+		--color-card: oklch(0.195 0.018 262);
+		--color-primary: oklch(0.62 0.19 262);
+		--color-primary-foreground: oklch(0.99 0 0);
+		--color-muted-foreground: oklch(0.72 0.02 258);
+		--color-border: oklch(1 0 0 / 10%);
+	}
+}
+
+@layer base {
+	* {
+		border-color: var(--color-border);
+	}
+
+	body {
+		background-color: var(--color-background);
+		color: var(--color-foreground);
+		-webkit-font-smoothing: antialiased;
+	}
+}
+
+/* Entrance animation — disabled for users who ask for reduced motion. */
+@keyframes rise {
+	from {
+		opacity: 0;
+		transform: translateY(1rem);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@layer utilities {
+	.animate-rise {
+		animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.animate-rise {
+			animation: none;
+		}
+	}
+}
