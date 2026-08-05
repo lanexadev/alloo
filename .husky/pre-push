@@ -1,0 +1,4 @@
+# Types and unit tests before anything leaves the machine.
+# End-to-end tests are left to CI: they build both apps and take ~40s.
+bun run typecheck
+bun run test
