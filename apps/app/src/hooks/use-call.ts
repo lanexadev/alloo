@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useCallStore } from "@/lib/call-store";
 import { WebRTCManager } from "@/lib/webrtc-manager";
@@ -57,6 +57,9 @@ export function useCall() {
 	const sendSignalMutation = useMutation(api.calls.sendSignal);
 	const consumeSignalsMutation = useMutation(api.calls.consumeSignals);
 
+	// --- actions ---------------------------------------------------------------
+	const fetchIceServers = useAction(api.turn.getIceServers);
+
 	const sendSignalRef = useRef(sendSignalMutation);
 	useEffect(() => {
 		sendSignalRef.current = sendSignalMutation;
@@ -92,28 +95,55 @@ export function useCall() {
 		processedSignalIds.current.clear();
 	}, []);
 
-	const getOrCreateManager = useCallback((polite: boolean): WebRTCManager => {
-		if (managerRef.current) return managerRef.current;
-		const manager = new WebRTCManager({
-			polite,
-			onSignal: (type, payload) => {
-				const cId = useCallStore.getState().callId as Id<"calls"> | null;
-				const to = peerUserIdRef.current;
-				if (!cId || !to) return;
-				sendSignalRef
-					.current({ callId: cId, toUserId: to, type, payload })
-					.catch((err: unknown) =>
-						console.error("[call] sendSignal failed:", err),
-					);
-			},
-			onRemoteStream: (stream) => {
-				useCallStore.getState().setRemoteStream(stream);
-				useCallStore.getState().setConnected();
-			},
-		});
-		managerRef.current = manager;
-		return manager;
-	}, []);
+	/**
+	 * TURN credentials are short-lived, so they are minted per call rather than
+	 * cached for the session. A failure here is not fatal: the manager falls back
+	 * to STUN-only, which still connects directly reachable peers.
+	 */
+	const resolveIceServers = useCallback(async (): Promise<
+		RTCIceServer[] | undefined
+	> => {
+		try {
+			const { iceServers } = await fetchIceServers();
+			return iceServers;
+		} catch (err) {
+			console.error(
+				"[call] ICE server fetch failed, falling back to STUN only:",
+				err,
+			);
+			return undefined;
+		}
+	}, [fetchIceServers]);
+
+	const getOrCreateManager = useCallback(
+		async (polite: boolean): Promise<WebRTCManager> => {
+			if (managerRef.current) return managerRef.current;
+			const iceServers = await resolveIceServers();
+			// A concurrent call may have created the manager while we awaited.
+			if (managerRef.current) return managerRef.current;
+			const manager = new WebRTCManager({
+				polite,
+				iceServers,
+				onSignal: (type, payload) => {
+					const cId = useCallStore.getState().callId as Id<"calls"> | null;
+					const to = peerUserIdRef.current;
+					if (!cId || !to) return;
+					sendSignalRef
+						.current({ callId: cId, toUserId: to, type, payload })
+						.catch((err: unknown) =>
+							console.error("[call] sendSignal failed:", err),
+						);
+				},
+				onRemoteStream: (stream) => {
+					useCallStore.getState().setRemoteStream(stream);
+					useCallStore.getState().setConnected();
+				},
+			});
+			managerRef.current = manager;
+			return manager;
+		},
+		[resolveIceServers],
+	);
 
 	// --- resolve the single peer ----------------------------------------------
 	useEffect(() => {
@@ -242,7 +272,7 @@ export function useCall() {
 	const startCall = useCallback(
 		async (targetConversationId: string, type: "audio" | "video") => {
 			try {
-				const manager = getOrCreateManager(false); // caller = impolite
+				const manager = await getOrCreateManager(false); // caller = impolite
 				const stream = await manager.acquireMedia(type === "video");
 				useCallStore.getState().setLocalStream(stream);
 				const newCallId = await initiateMutation({
@@ -264,7 +294,7 @@ export function useCall() {
 		const state = useCallStore.getState();
 		if (!state.callId) return;
 		try {
-			const manager = getOrCreateManager(true); // callee = polite
+			const manager = await getOrCreateManager(true); // callee = polite
 			const stream = await manager.acquireMedia(state.callType === "video");
 			useCallStore.getState().setLocalStream(stream);
 			// Leave "ringing" BEFORE the mutation resolves: accepting flips the call

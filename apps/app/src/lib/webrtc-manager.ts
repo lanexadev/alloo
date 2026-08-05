@@ -16,6 +16,12 @@ export type SignalType = "offer" | "answer" | "ice-candidate";
 interface WebRTCManagerConfig {
 	/** True for the callee (incoming), false for the caller (outgoing). */
 	polite: boolean;
+	/**
+	 * ICE servers for this connection, minted server-side by `turn.getIceServers`.
+	 * Falls back to {@link FALLBACK_ICE_SERVERS} when omitted, which only connects
+	 * peers that are directly reachable — see the note on that constant.
+	 */
+	iceServers?: RTCIceServer[];
 	/** Relay an SDP description or ICE candidate to the peer. */
 	onSignal: (type: SignalType, payload: string) => void;
 	/** The peer's combined media stream became available. */
@@ -24,7 +30,14 @@ interface WebRTCManagerConfig {
 	onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
 }
 
-const ICE_SERVERS: RTCIceServer[] = [
+/**
+ * Last-resort configuration when the server returns nothing.
+ *
+ * STUN alone fails behind symmetric NAT and most corporate firewalls: without a
+ * TURN relay those calls never connect. Configure TURN on the Convex deployment
+ * (see convex/turn.ts) so real users are not left on this path.
+ */
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
 	{ urls: "stun:stun.l.google.com:19302" },
 	{ urls: "stun:stun1.l.google.com:19302" },
 ];
@@ -55,7 +68,9 @@ export class WebRTCManager {
 	}
 
 	private createPeerConnection(): RTCPeerConnection {
-		const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+		const pc = new RTCPeerConnection({
+			iceServers: this.config.iceServers ?? FALLBACK_ICE_SERVERS,
+		});
 
 		pc.onnegotiationneeded = async () => {
 			try {
