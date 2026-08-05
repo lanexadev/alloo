@@ -1,0 +1,36 @@
+{
+	"$schema": "https://turborepo.com/schema.json",
+	"ui": "stream",
+	"globalDependencies": ["biome.json", "tsconfig.base.json"],
+	"globalEnv": ["NODE_ENV", "CI", "ALLOO_APP_PORT", "ALLOO_LANDING_PORT"],
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": [".next/**", "!.next/cache/**"],
+			"env": [
+				"NEXT_PUBLIC_CONVEX_URL",
+				"NEXT_PUBLIC_APP_URL",
+				"ALLOO_DEV_ORIGINS"
+			]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true
+		},
+		"start": {
+			"dependsOn": ["build"],
+			"cache": false,
+			"persistent": true
+		},
+		"typecheck": {
+			"outputs": []
+		},
+		"test": {
+			"outputs": ["coverage/**"]
+		},
+		"test:watch": {
+			"cache": false,
+			"persistent": true
+		}
+	}
+}
