@@ -21,6 +21,8 @@ interface CallViewProps {
 	isScreenSharing: boolean;
 	startedAt: number | null;
 	error: string | null;
+	/** Media stopped flowing but ICE is still trying to recover. */
+	isReconnecting: boolean;
 	onToggleMute: () => void;
 	onToggleCamera: () => void;
 	onToggleScreenShare: () => void;
@@ -72,13 +74,18 @@ export function CallView({
 	isScreenSharing,
 	startedAt,
 	error,
+	isReconnecting,
 	onToggleMute,
 	onToggleCamera,
 	onToggleScreenShare,
 	onHangUp,
 }: CallViewProps) {
 	const isVideoCall = callType === "video";
-	const phaseLabel = getPhaseLabel(phase);
+	// While reconnecting the phase is still "connected", so the status label has
+	// to say so explicitly rather than keep counting a timer that means nothing.
+	const phaseLabel = isReconnecting ? "Reconnexion…" : getPhaseLabel(phase);
+	const showTimer =
+		phase === "connected" && startedAt !== null && !isReconnecting;
 
 	return (
 		<motion.div
@@ -109,7 +116,7 @@ export function CallView({
 				</div>
 
 				<div className="text-sm text-white/60">
-					{phase === "connected" && startedAt ? (
+					{showTimer && startedAt !== null ? (
 						<CallTimer
 							startedAt={startedAt}
 							className="font-mono text-white/70"
@@ -170,7 +177,7 @@ export function CallView({
 
 						<div className="text-center">
 							<h3 className="text-lg font-semibold text-white">{remoteName}</h3>
-							{phase === "connected" ? (
+							{showTimer ? (
 								<div className="mt-3">
 									<AudioWaveAnimation />
 								</div>
@@ -191,11 +198,26 @@ export function CallView({
 				)}
 
 				<AnimatePresence>
-					{error && (
+					{isReconnecting && !error && (
 						<motion.div
+							key="reconnecting"
 							initial={{ opacity: 0, y: 10 }}
 							animate={{ opacity: 1, y: 0 }}
 							exit={{ opacity: 0, y: 10 }}
+							role="status"
+							className="mx-4 mb-2 flex items-center justify-center gap-2 rounded-lg bg-amber-500/20 px-4 py-2 text-center text-sm text-amber-200"
+						>
+							<span className="h-3 w-3 animate-spin rounded-full border-2 border-amber-200 border-t-transparent" />
+							Connexion instable, reconnexion…
+						</motion.div>
+					)}
+					{error && (
+						<motion.div
+							key="error"
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: 10 }}
+							role="alert"
 							className="mx-4 mb-2 rounded-lg bg-red-500/20 px-4 py-2 text-center text-sm text-red-300"
 						>
 							{error}

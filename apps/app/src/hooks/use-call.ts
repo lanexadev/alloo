@@ -10,6 +10,20 @@ import { useCurrentUser } from "./use-current-user";
 
 const RING_TIMEOUT_MS = 30_000;
 
+/**
+ * How long a `disconnected` peer connection is given to recover.
+ *
+ * `disconnected` is usually transient — ICE keeps probing and often reconnects
+ * on its own (Wi-Fi hiccup, handover to mobile data). Ending the call
+ * immediately would be wrong; waiting forever would leave a dead screen.
+ */
+const RECONNECT_GRACE_MS = 8000;
+
+/** Never connected: ICE tried every candidate pair and none worked. */
+const CONNECTION_FAILED_MESSAGE = "Connexion impossible sur ce réseau";
+/** Was connected, then media stopped and did not come back. */
+const CONNECTION_LOST_MESSAGE = "Connexion perdue";
+
 function mediaErrorMessage(err: unknown): string {
 	if (typeof navigator !== "undefined" && !navigator.mediaDevices) {
 		// getUserMedia only exists in secure contexts (https or localhost).
@@ -46,6 +60,7 @@ export function useCall() {
 	const localStream = useCallStore((s) => s.localStream);
 	const remoteStream = useCallStore((s) => s.remoteStream);
 	const error = useCallStore((s) => s.error);
+	const isReconnecting = useCallStore((s) => s.isReconnecting);
 
 	// --- mutations -------------------------------------------------------------
 	const initiateMutation = useMutation(api.calls.initiate);
@@ -64,6 +79,13 @@ export function useCall() {
 	useEffect(() => {
 		sendSignalRef.current = sendSignalMutation;
 	}, [sendSignalMutation]);
+
+	// Held in a ref so the connection-state handler below stays stable and does
+	// not force the peer connection to be rebuilt.
+	const hangupRef = useRef(hangupMutation);
+	useEffect(() => {
+		hangupRef.current = hangupMutation;
+	}, [hangupMutation]);
 
 	// --- queries ---------------------------------------------------------------
 	const incomingCall = useQuery(api.calls.incomingCall);
@@ -88,12 +110,46 @@ export function useCall() {
 	const peerUserIdRef = useRef<Id<"users"> | null>(null);
 	const processedSignalIds = useRef<Set<string>>(new Set());
 
+	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const clearReconnectTimer = useCallback(() => {
+		if (reconnectTimerRef.current) {
+			clearTimeout(reconnectTimerRef.current);
+			reconnectTimerRef.current = null;
+		}
+	}, []);
+
 	const teardown = useCallback(() => {
+		clearReconnectTimer();
 		managerRef.current?.destroy();
 		managerRef.current = null;
 		peerUserIdRef.current = null;
 		processedSignalIds.current.clear();
-	}, []);
+	}, [clearReconnectTimer]);
+
+	/**
+	 * End the call because the media path died, not because someone hung up.
+	 *
+	 * Hangs up server-side too: the peer is waiting on the same broken connection
+	 * and would otherwise sit on a frozen screen until they gave up manually.
+	 */
+	const failCall = useCallback(
+		(reason: string) => {
+			clearReconnectTimer();
+			const state = useCallStore.getState();
+			if (state.phase === "idle" || state.phase === "ended") return;
+			if (state.callId) {
+				hangupRef
+					.current({ callId: state.callId as Id<"calls"> })
+					.catch((err: unknown) =>
+						console.error("[call] hangup after connection failure:", err),
+					);
+			}
+			teardown();
+			useCallStore.getState().endCall(reason);
+		},
+		[clearReconnectTimer, teardown],
+	);
 
 	/**
 	 * TURN credentials are short-lived, so they are minted per call rather than
@@ -138,11 +194,51 @@ export function useCall() {
 					useCallStore.getState().setRemoteStream(stream);
 					useCallStore.getState().setConnected();
 				},
+				onConnectionStateChange: (connectionState) => {
+					const store = useCallStore.getState();
+					// `closed` only ever follows our own teardown, and a call already
+					// resolved needs no further transition.
+					if (store.phase === "idle" || store.phase === "ended") return;
+
+					switch (connectionState) {
+						case "connected":
+							clearReconnectTimer();
+							store.setReconnecting(false);
+							break;
+
+						case "disconnected":
+							// Usually transient. Show it, but arm a deadline so the call
+							// cannot hang on a frozen screen forever.
+							store.setReconnecting(true);
+							clearReconnectTimer();
+							reconnectTimerRef.current = setTimeout(() => {
+								failCall(CONNECTION_LOST_MESSAGE);
+							}, RECONNECT_GRACE_MS);
+							break;
+
+						case "failed":
+							// ICE exhausted every candidate pair; it will not recover on its
+							// own. Typically symmetric NAT or a firewall with no TURN relay
+							// available to fall back on.
+							console.error(
+								"[call] peer connection failed — no usable candidate pair (TURN relay missing or unreachable?)",
+							);
+							failCall(
+								store.phase === "connected"
+									? CONNECTION_LOST_MESSAGE
+									: CONNECTION_FAILED_MESSAGE,
+							);
+							break;
+
+						default:
+							break;
+					}
+				},
 			});
 			managerRef.current = manager;
 			return manager;
 		},
-		[resolveIceServers],
+		[resolveIceServers, clearReconnectTimer, failCall],
 	);
 
 	// --- resolve the single peer ----------------------------------------------
@@ -261,10 +357,11 @@ export function useCall() {
 	// --- cleanup & idle reset --------------------------------------------------
 	useEffect(() => {
 		if (phase === "idle") {
+			clearReconnectTimer();
 			peerUserIdRef.current = null;
 			processedSignalIds.current.clear();
 		}
-	}, [phase]);
+	}, [phase, clearReconnectTimer]);
 
 	useEffect(() => () => teardown(), [teardown]);
 
@@ -398,6 +495,7 @@ export function useCall() {
 		localStream,
 		remoteStream,
 		error,
+		isReconnecting,
 		startCall,
 		acceptCall,
 		declineCall,

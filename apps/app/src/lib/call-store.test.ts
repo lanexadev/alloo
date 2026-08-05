@@ -79,3 +79,51 @@ describe("call-store phase machine", () => {
 		expect(s().isScreenSharing).toBe(true);
 	});
 });
+
+describe("call-store reconnection", () => {
+	beforeEach(() => {
+		s().reset();
+	});
+
+	it("a dropped connection keeps the call connected, only flags reconnecting", () => {
+		s().startCall("call1", "conv1", "audio");
+		s().setConnected();
+
+		s().setReconnecting(true);
+
+		expect(s().isReconnecting).toBe(true);
+		expect(s().phase).toBe("connected");
+	});
+
+	it("keeps the elapsed timer across a reconnection", () => {
+		s().startCall("call1", "conv1", "audio");
+		s().setConnected();
+		const startedAt = s().startedAt;
+
+		s().setReconnecting(true);
+		s().setConnected();
+
+		expect(s().isReconnecting).toBe(false);
+		expect(s().startedAt).toBe(startedAt);
+	});
+
+	it("clears the reconnecting flag when the call ends", () => {
+		s().startCall("call1", "conv1", "audio");
+		s().setConnected();
+		s().setReconnecting(true);
+
+		s().endCall("Connexion perdue");
+
+		expect(s().phase).toBe("ended");
+		expect(s().error).toBe("Connexion perdue");
+		expect(s().isReconnecting).toBe(false);
+	});
+
+	it("starts a fresh call without a stale reconnecting flag", () => {
+		s().setReconnecting(true);
+
+		s().reset();
+
+		expect(s().isReconnecting).toBe(false);
+	});
+});

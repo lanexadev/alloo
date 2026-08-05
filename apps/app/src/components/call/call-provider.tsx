@@ -147,6 +147,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
 						isScreenSharing={call.isScreenSharing}
 						startedAt={call.startedAt}
 						error={call.error}
+						isReconnecting={call.isReconnecting}
 						onToggleMute={call.toggleMute}
 						onToggleCamera={call.toggleCamera}
 						onToggleScreenShare={() => void call.toggleScreenShare()}

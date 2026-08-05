@@ -33,11 +33,20 @@ interface CallState {
 	localStream: MediaStream | null;
 	remoteStream: MediaStream | null;
 	error: string | null;
+	/**
+	 * The peer connection dropped but ICE is still probing.
+	 *
+	 * Orthogonal to `phase`: the call is still `connected` as far as both parties
+	 * are concerned, media has simply stopped flowing. It either recovers on its
+	 * own or the grace period expires and the call ends.
+	 */
+	isReconnecting: boolean;
 
 	startCall: (callId: string, conversationId: string, type: CallType) => void;
 	receiveCall: (callId: string, conversationId: string, type: CallType) => void;
 	setConnecting: () => void;
 	setConnected: () => void;
+	setReconnecting: (reconnecting: boolean) => void;
 	endCall: (reason?: string) => void;
 	reset: () => void;
 	setMuted: (muted: boolean) => void;
@@ -60,6 +69,7 @@ const initialState = {
 	localStream: null as MediaStream | null,
 	remoteStream: null as MediaStream | null,
 	error: null as string | null,
+	isReconnecting: false,
 };
 
 export const useCallStore = create<CallState>((set) => ({
@@ -92,11 +102,18 @@ export const useCallStore = create<CallState>((set) => ({
 	setConnected: () =>
 		set((state) =>
 			state.phase === "connected"
-				? state
-				: { phase: "connected", startedAt: state.startedAt ?? Date.now() },
+				? { ...state, isReconnecting: false }
+				: {
+						phase: "connected",
+						startedAt: state.startedAt ?? Date.now(),
+						isReconnecting: false,
+					},
 		),
 
-	endCall: (reason) => set({ phase: "ended", error: reason ?? null }),
+	setReconnecting: (isReconnecting) => set({ isReconnecting }),
+
+	endCall: (reason) =>
+		set({ phase: "ended", error: reason ?? null, isReconnecting: false }),
 
 	reset: () => set({ ...initialState, remoteStream: null }),
 
