@@ -1,53 +1,67 @@
 import type { Metadata, Viewport } from "next";
-import { Figtree } from "next/font/google";
-import { Geist_Mono } from "next/font/google";
+import { Figtree, Geist_Mono } from "next/font/google";
+import { cn } from "@/lib/utils";
 import { ConvexProvider } from "@/providers/convex-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
-import { cn } from "@/lib/utils";
 import "./globals.css";
 
 const figtree = Figtree({
-  subsets: ["latin"],
-  variable: "--font-sans",
+	subsets: ["latin"],
+	variable: "--font-sans",
 });
 
 const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
+	subsets: ["latin"],
+	variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
-  title: "Alloo — Juste discuter. Rien d'autre.",
-  description:
-    "Chat minimaliste dans ton navigateur. Messages privés et groupes, zéro bloat. Gratuit.",
+	title: "Alloo — Juste discuter. Rien d'autre.",
+	description:
+		"Chat minimaliste dans ton navigateur. Messages privés et groupes, zéro bloat. Gratuit.",
+	applicationName: "Alloo",
+	icons: {
+		icon: "/icon.svg",
+		apple: "/icon.svg",
+	},
+	appleWebApp: {
+		capable: true,
+		title: "Alloo",
+		statusBarStyle: "default",
+	},
 };
 
 export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f8f9fc" },
-    { media: "(prefers-color-scheme: dark)", color: "#14161f" },
-  ],
+	width: "device-width",
+	initialScale: 1,
+	viewportFit: "cover",
+	themeColor: [
+		{ media: "(prefers-color-scheme: light)", color: "#f8f9fc" },
+		{ media: "(prefers-color-scheme: dark)", color: "#14161f" },
+	],
 };
 
 export default function RootLayout({
-  children,
+	children,
 }: Readonly<{
-  children: React.ReactNode;
+	children: React.ReactNode;
 }>) {
-  return (
-    <html
-      lang="fr"
-      suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", figtree.variable)}
-    >
-      <body>
-        <ThemeProvider>
-          <ConvexProvider>{children}</ConvexProvider>
-        </ThemeProvider>
-      </body>
-    </html>
-  );
+	return (
+		<html
+			lang="fr"
+			suppressHydrationWarning
+			className={cn(
+				"antialiased",
+				fontMono.variable,
+				"font-sans",
+				figtree.variable,
+			)}
+		>
+			<body>
+				<ThemeProvider>
+					<ConvexProvider>{children}</ConvexProvider>
+				</ThemeProvider>
+			</body>
+		</html>
+	);
 }
