@@ -1,0 +1,14 @@
+# The repository is formatted with LF and Biome fails on CRLF, so check every
+# text file out with LF regardless of the platform. Without this, a clone on a
+# Windows machine with core.autocrlf enabled fails `bun run lint` immediately.
+* text=auto eol=lf
+
+# Never touched by the formatter, and corrupted by end-of-line conversion.
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
